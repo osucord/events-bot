@@ -1,0 +1,9 @@
+# IDE
+.vs/
+.vscode/**
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+
+# build directory.
+/target
