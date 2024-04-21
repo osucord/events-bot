@@ -1,7 +1,7 @@
 use poise::serenity_prelude as serenity;
 use std::{sync::Arc, time::Duration};
 
-pub struct Data {} // User data
+pub struct Data {}
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 pub type Command = poise::Command<Data, Error>;
@@ -39,29 +39,18 @@ pub async fn handler(
 #[tokio::main]
 async fn main() {
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
-    let intents = serenity::GatewayIntents::non_privileged();
+    let intents = serenity::GatewayIntents::all();
 
     let options = poise::FrameworkOptions {
         commands: vec![],
         prefix_options: poise::PrefixFrameworkOptions {
-            prefix: Some(">>".into()),
+            prefix: Some("sex!".into()),
             edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
-                Duration::from_secs(3600),
+                Duration::from_secs(300),
             ))),
-            additional_prefixes: vec![poise::Prefix::Literal("please")],
             ..Default::default()
         },
         on_error: |error| Box::pin(on_error(error)),
-        pre_command: |ctx| {
-            Box::pin(async move {
-                println!("Executing command {}", ctx.command().qualified_name);
-            })
-        },
-        post_command: |ctx| {
-            Box::pin(async move {
-                println!("Executed command {}", ctx.command().qualified_name);
-            })
-        },
         event_handler: |_ctx, event, _framework, _data| Box::pin(handler(_ctx, event, _data)),
         ..Default::default()
     };
@@ -69,7 +58,6 @@ async fn main() {
     let framework = poise::Framework::builder()
         .setup(move |ctx, _ready, framework| {
             Box::pin(async move {
-                println!("{} is now ready!", _ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {})
             })
