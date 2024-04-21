@@ -7,3 +7,6 @@
 
 # build directory.
 /target
+
+# data store.
+questions.json

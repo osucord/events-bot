@@ -1,23 +1,12 @@
 use poise::serenity_prelude as serenity;
-use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
 
 mod commands;
+mod data;
 mod events;
+use data::Data;
 
 use parking_lot::RwLock;
-
-// TODO: no longer dead code.
-#[allow(dead_code)]
-pub struct Data {
-    questions: RwLock<Vec<Question>>,
-}
-
-#[derive(Serialize, Deserialize, Default)]
-pub struct Question {
-    pub question: String,
-    pub answers: Vec<String>,
-}
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
@@ -61,6 +50,9 @@ async fn main() {
     let data = Data {
         questions: RwLock::new(vec![]),
     };
+    // load questions.
+    data.load_questions()
+        .unwrap_or_else(|e| panic!("Cannot load questions!!: {}", e));
 
     let framework = poise::Framework::builder()
         .setup(move |ctx, _ready, framework| {
