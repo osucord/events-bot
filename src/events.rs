@@ -1,7 +1,6 @@
 use crate::{Data, Error};
 use poise::serenity_prelude as serenity;
 
-
 /// # Errors
 ///
 /// Currently this cannot error because we are not doing anything that can.
