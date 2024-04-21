@@ -14,19 +14,17 @@ pub type Command = poise::Command<Data, Error>;
 
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
-        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {:?}", error),
+        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {error:?}"),
         poise::FrameworkError::Command { error, ctx, .. } => {
             println!("Error in command `{}`: {:?}", ctx.command().name, error);
         }
         poise::FrameworkError::CommandCheckFailed { error, ctx, .. } => {
-            let error_msg = error
-                .map(|e| e.to_string())
-                .unwrap_or_else(|| "You cannot execute this command.".to_owned());
+            let error_msg = error.map_or_else(|| "You cannot execute this command.".to_owned(), |e| e.to_string());
             let _ = ctx.say(error_msg).await;
         }
         error => {
             if let Err(e) = poise::builtins::on_error(error).await {
-                println!("Error while handling error: {}", e);
+                println!("Error while handling error: {e}");
             }
         }
     }
@@ -58,7 +56,7 @@ async fn main() {
     };
     // load questions.
     data.load_questions()
-        .unwrap_or_else(|e| panic!("Cannot load questions!!: {}", e));
+        .unwrap_or_else(|e| panic!("Cannot load questions!!: {e}"));
 
     let framework = poise::Framework::builder()
         .setup(move |ctx, _ready, framework| {

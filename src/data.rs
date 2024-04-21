@@ -18,10 +18,10 @@ impl Data {
         let questions_file = std::fs::read_to_string("questions.json");
 
         match questions_file {
-            Ok(questions) => self._load_questions(questions)?,
+            Ok(questions) => self._load_questions(&questions)?,
             Err(error) => match error.kind() {
                 std::io::ErrorKind::NotFound => {
-                    self.create_file()?;
+                    create_file()?;
                 }
                 _ => return Err("Cannot load file!".into()),
             },
@@ -29,8 +29,8 @@ impl Data {
         Ok(())
     }
 
-    fn _load_questions(&self, questions: String) -> Result<(), Error> {
-        match serde_json::from_str::<Vec<Question>>(&questions) {
+    fn _load_questions(&self, questions: &str) -> Result<(), Error> {
+        match serde_json::from_str::<Vec<Question>>(questions) {
             Ok(questions) => {
                 *self.questions.write() = questions;
             }
@@ -41,11 +41,12 @@ impl Data {
         Ok(())
     }
 
-    fn create_file(&self) -> Result<(), Error> {
-        let mut file = std::fs::File::create("questions.json")?;
-        // write empty.
-        file.write_all(b"[]")?;
+}
 
-        Ok(())
-    }
+fn create_file() -> Result<(), Error> {
+    let mut file = std::fs::File::create("questions.json")?;
+    // write empty.
+    file.write_all(b"[]")?;
+
+    Ok(())
 }
