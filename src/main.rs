@@ -1,39 +1,85 @@
-// Makes clippy annoying, but otherwise very good.
-#![warn(clippy::pedantic)]
-
-pub mod data;
-pub mod events;
-use data::Data;
-
-use std::env::var;
-
 use poise::serenity_prelude as serenity;
+use std::{sync::Arc, time::Duration};
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
-#[allow(unused)]
-type Context<'a> = poise::Context<'a, Data, Error>;
+pub struct Data {} // User data
+pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub type Context<'a> = poise::Context<'a, Data, Error>;
+pub type Command = poise::Command<Data, Error>;
+
+async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
+    match error {
+        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {:?}", error),
+        poise::FrameworkError::Command { error, ctx, .. } => {
+            println!("Error in command `{}`: {:?}", ctx.command().name, error);
+        }
+        error => {
+            if let Err(e) = poise::builtins::on_error(error).await {
+                println!("Error while handling error: {}", e);
+            }
+        }
+    }
+}
+
+
+#[allow(clippy::single_match)]
+pub async fn handler(
+    _ctx: &serenity::Context,
+    event: &serenity::FullEvent,
+    _data: &Data,
+) -> Result<(), Error> {
+    match event {
+        serenity::FullEvent::Ready { data_about_bot, .. } => {
+            println!("{} is now ready!", data_about_bot.user.name);
+        }
+        _ => {}
+    }
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() {
-    let token = var("DISCORD_TOKEN").expect("Missing `DISCORD_TOKEN` environment variable.");
+    let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let intents = serenity::GatewayIntents::non_privileged();
 
-    // TODO: pick only the intents we need.
-    let intents = serenity::GatewayIntents::non_privileged()
-        | serenity::GatewayIntents::MESSAGE_CONTENT
-        | serenity::GatewayIntents::GUILD_MEMBERS
-        | serenity::GatewayIntents::GUILD_PRESENCES;
+    let options = poise::FrameworkOptions {
+        commands: vec![],
+        prefix_options: poise::PrefixFrameworkOptions {
+            prefix: Some(">>".into()),
+            edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
+                Duration::from_secs(3600),
+            ))),
+            additional_prefixes: vec![poise::Prefix::Literal("please")],
+            ..Default::default()
+        },
+        on_error: |error| Box::pin(on_error(error)),
+        pre_command: |ctx| {
+            Box::pin(async move {
+                println!("Executing command {}", ctx.command().qualified_name);
+            })
+        },
+        post_command: |ctx| {
+            Box::pin(async move {
+                println!("Executed command {}", ctx.command().qualified_name);
+            })
+        },
+        event_handler: |_ctx, event, _framework, _data| Box::pin(handler(_ctx, event, _data)),
+        ..Default::default()
+    };
 
     let framework = poise::Framework::builder()
-        .setup(move |_ctx, _ready, _framework| Box::pin(async move { Ok(Data::new()) }))
-        .options(poise::FrameworkOptions {
-            event_handler: |ctx, event, _framework, data| Box::pin(events::handler(ctx, event, data)),
-            ..Default::default()
+        .setup(move |ctx, _ready, framework| {
+            Box::pin(async move {
+                println!("{} is now ready!", _ready.user.name);
+                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                Ok(Data {})
+            })
         })
+        .options(options)
         .build();
 
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .await;
-
     client.unwrap().start().await.unwrap();
 }
+
