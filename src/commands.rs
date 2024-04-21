@@ -1,8 +1,38 @@
 use crate::{Context, Error};
 use poise::serenity_prelude::CreateEmbed;
+use serenity::all::RoleId;
+
+pub fn has_role(ctx: Context<'_>, check_role: u64) -> Result<bool, Error> {
+    let has_role = match ctx {
+        Context::Prefix(pctx) => {
+            let roles = &pctx.msg.member.as_ref().unwrap().roles;
+            roles.contains(&RoleId::new(check_role))
+        }
+        Context::Application(actx) => {
+            let roles = &actx.interaction.member.as_ref().unwrap().roles;
+            roles.contains(&RoleId::new(check_role))
+        }
+    };
+
+    if !has_role {
+        return Err("You do not have the required permissions for this!".into());
+    }
+
+    Ok(true)
+}
+
+pub async fn has_event_committee(ctx: Context<'_>) -> Result<bool, Error> {
+    has_role(ctx, 1199033047501242439)
+}
 
 /// List the questions :3
-#[poise::command(rename = "list-questions", prefix_command, slash_command)]
+#[poise::command(
+    rename = "list-questions",
+    check = "has_event_committee",
+    prefix_command,
+    slash_command,
+    guild_only
+)]
 pub async fn list_questions(ctx: Context<'_>) -> Result<(), Error> {
     let questions: String = {
         let data = ctx.data();

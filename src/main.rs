@@ -18,6 +18,12 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
         poise::FrameworkError::Command { error, ctx, .. } => {
             println!("Error in command `{}`: {:?}", ctx.command().name, error);
         }
+        poise::FrameworkError::CommandCheckFailed { error, ctx, .. } => {
+            let error_msg = error
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "You cannot execute this command.".to_owned());
+            let _ = ctx.say(error_msg).await;
+        }
         error => {
             if let Err(e) = poise::builtins::on_error(error).await {
                 println!("Error while handling error: {}", e);
