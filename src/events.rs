@@ -1,15 +1,14 @@
-use crate::{Data, Error};
+use crate::{Error, FrameworkContext};
 use poise::serenity_prelude as serenity;
 
 /// # Errors
 ///
 /// Currently this cannot error because we are not doing anything that can.
 #[allow(clippy::unused_async, clippy::single_match)]
-#[allow(clippy::no_effect_underscore_binding)]
+#[allow(unused_variables)] // fix later.
 pub async fn handler(
-    _ctx: &serenity::Context,
     event: &serenity::FullEvent,
-    _data: &Data,
+    framework: FrameworkContext<'_>,
 ) -> Result<(), Error> {
     match event {
         serenity::FullEvent::Ready { data_about_bot, .. } => {

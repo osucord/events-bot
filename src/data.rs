@@ -40,7 +40,6 @@ impl Data {
         }
         Ok(())
     }
-
 }
 
 fn create_file() -> Result<(), Error> {

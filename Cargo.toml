@@ -6,13 +6,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# Discord API
-serenity = "0.12"
-poise = "0.6"
-tokio = { version = "1.36", features = ["macros", "signal", "rt-multi-thread", "net", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "signal", "parking_lot"] }
 
-# Misc
 dashmap = "5.5.3"
 parking_lot = "0.12.1"
 serde = "1.0.198"
 serde_json = "1.0.116"
+
+[dependencies.serenity]
+git = "https://github.com/serenity-rs/serenity"
+features = ["temp_cache"]
+default-features = false
+branch = "next"
+
+[dependencies.poise]
+git = "https://github.com/serenity-rs/poise"
+features = ["cache"]
+branch = "serenity-next"

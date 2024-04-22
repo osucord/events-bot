@@ -36,14 +36,16 @@ pub async fn has_event_committee(ctx: Context<'_>) -> Result<bool, Error> {
 pub async fn list_questions(ctx: Context<'_>) -> Result<(), Error> {
     let questions: String = {
         let data = ctx.data();
-        data.questions
+        let q = data
+            .questions
             .read()
             .iter()
             .enumerate()
             .map(|(i, q)| format!("{}. {}", i, q.question))
-    }
-    .collect::<Vec<String>>()
-    .join("\n");
+            .collect::<Vec<String>>()
+            .join("\n");
+        q
+    };
 
     if questions.is_empty() {
         ctx.say("There are currently no questions.").await?;

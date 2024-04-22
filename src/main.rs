@@ -10,16 +10,19 @@ use parking_lot::RwLock;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
+pub type FrameworkContext<'a> = poise::FrameworkContext<'a, Data, Error>;
 pub type Command = poise::Command<Data, Error>;
 
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
-        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {error:?}"),
         poise::FrameworkError::Command { error, ctx, .. } => {
             println!("Error in command `{}`: {:?}", ctx.command().name, error);
         }
         poise::FrameworkError::CommandCheckFailed { error, ctx, .. } => {
-            let error_msg = error.map_or_else(|| "You cannot execute this command.".to_owned(), |e| e.to_string());
+            let error_msg = error.map_or_else(
+                || "You cannot execute this command.".to_owned(),
+                |e| e.to_string(),
+            );
             let _ = ctx.say(error_msg).await;
         }
         error => {
@@ -45,9 +48,7 @@ async fn main() {
             ..Default::default()
         },
         on_error: |error| Box::pin(on_error(error)),
-        event_handler: |_ctx, event, _framework, _data| {
-            Box::pin(events::handler(_ctx, event, _data))
-        },
+        event_handler: |framework, event| Box::pin(events::handler(event, framework)),
         ..Default::default()
     };
 
@@ -58,17 +59,9 @@ async fn main() {
     data.load_questions()
         .unwrap_or_else(|e| panic!("Cannot load questions!!: {e}"));
 
-    let framework = poise::Framework::builder()
-        .setup(move |ctx, _ready, framework| {
-            Box::pin(async move {
-                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(data)
-            })
-        })
-        .options(options)
-        .build();
+    let framework = poise::Framework::new(options);
 
-    let client = serenity::ClientBuilder::new(token, intents)
+    let client = serenity::ClientBuilder::new(&token, intents)
         .framework(framework)
         .await;
     client.unwrap().start().await.unwrap();
