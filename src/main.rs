@@ -63,6 +63,7 @@ async fn main() {
 
     let client = serenity::ClientBuilder::new(&token, intents)
         .framework(framework)
+        .data(Arc::new(data))
         .await;
     client.unwrap().start().await.unwrap();
 }
