@@ -65,7 +65,7 @@ async fn main() {
     };
     // load questions.
     data.load_questions()
-        .unwrap_or_else(|e| panic!("Cannot load questions!!: {e}"));
+        .unwrap_or_else(|e| panic!("Cannot load escape room!!: {e}"));
 
     let framework = poise::Framework::new(options);
 

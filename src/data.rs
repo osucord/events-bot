@@ -23,7 +23,7 @@ pub struct Question {
 
 impl Data {
     pub fn load_questions(&self) -> Result<(), Error> {
-        let questions_file = std::fs::read_to_string("questions.json");
+        let questions_file = std::fs::read_to_string("escape_room.json");
 
         match questions_file {
             Ok(questions) => self._load_questions(&questions)?,
@@ -38,12 +38,16 @@ impl Data {
     }
 
     fn _load_questions(&self, questions: &str) -> Result<(), Error> {
-        match serde_json::from_str::<Vec<Question>>(questions) {
-            Ok(questions) => {
-                self.escape_room.write().questions = questions;
+        match serde_json::from_str::<EscapeRoom>(questions) {
+            Ok(config) => {
+                let mut escape_room = self.escape_room.write();
+
+                escape_room.active = config.active;
+                escape_room.questions = config.questions;
+
             }
             Err(_) => {
-                return Err("Cannot read questions!".into());
+                return Err("Cannot read escape room configuration!".into());
             }
         }
         Ok(())
@@ -51,7 +55,7 @@ impl Data {
 }
 
 fn create_file() -> Result<(), Error> {
-    let mut file = std::fs::File::create("questions.json")?;
+    let mut file = std::fs::File::create("escape_room.json")?;
     // write empty.
     file.write_all(b"[]")?;
 
