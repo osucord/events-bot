@@ -2,7 +2,6 @@ use crate::Error;
 use parking_lot::RwLock;
 use poise::serenity_prelude::ChannelId;
 use serde::{Deserialize, Serialize};
-use std::io::Write;
 
 pub struct Data {
     pub escape_room: RwLock<EscapeRoom>,
@@ -11,6 +10,7 @@ pub struct Data {
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct EscapeRoom {
     pub active: bool,
+    pub category: Option<ChannelId>,
     pub questions: Vec<Question>,
 }
 
@@ -44,7 +44,6 @@ impl Data {
 
                 escape_room.active = config.active;
                 escape_room.questions = config.questions;
-
             }
             Err(_) => {
                 return Err("Cannot read escape room configuration!".into());
@@ -55,9 +54,8 @@ impl Data {
 }
 
 fn create_file() -> Result<(), Error> {
-    let mut file = std::fs::File::create("escape_room.json")?;
-    // write empty.
-    file.write_all(b"[]")?;
+    let file = std::fs::File::create("escape_room.json")?;
+    serde_json::to_writer(file, &EscapeRoom::default()).unwrap();
 
     Ok(())
 }

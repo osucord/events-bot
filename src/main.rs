@@ -58,10 +58,7 @@ async fn main() {
     };
 
     let data = Data {
-        escape_room: RwLock::new(EscapeRoom {
-            active: false,
-            questions: vec![],
-        }),
+        escape_room: RwLock::new(EscapeRoom::default()),
     };
     // load questions.
     data.load_questions()
