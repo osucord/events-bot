@@ -21,6 +21,16 @@ pub struct Question {
     pub channel: Option<ChannelId>,
 }
 
+impl EscapeRoom {
+    pub fn write_questions(&self) -> Result<(), Error> {
+        let file = std::fs::File::create("escape_room.json")?;
+
+        serde_json::to_writer_pretty(file, &self).unwrap();
+
+        Ok(())
+    }
+}
+
 impl Data {
     pub fn load_questions(&self) -> Result<(), Error> {
         let questions_file = std::fs::read_to_string("escape_room.json");
@@ -51,11 +61,20 @@ impl Data {
         }
         Ok(())
     }
+
+    // you should probably use `EscapeRoom::write_questions` instead if you already need to grab a lock.
+    pub fn write_questions(&self) -> Result<(), Error> {
+        let file = std::fs::File::create("escape_room.json")?;
+
+        serde_json::to_writer_pretty(file, &*self.escape_room.read()).unwrap();
+
+        Ok(())
+    }
 }
 
 fn create_file() -> Result<(), Error> {
     let file = std::fs::File::create("escape_room.json")?;
-    serde_json::to_writer(file, &EscapeRoom::default()).unwrap();
+    serde_json::to_writer_pretty(file, &EscapeRoom::default()).unwrap();
 
     Ok(())
 }

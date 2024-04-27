@@ -225,6 +225,9 @@ async fn handle_confirm(
             answers: answers.clone(),
             channel: None,
         });
+
+        escape_room.write_questions().unwrap();
+
     }
 
     let description = if answers.is_empty() {
