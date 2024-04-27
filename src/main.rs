@@ -39,7 +39,7 @@ async fn main() {
     let intents = serenity::GatewayIntents::all();
 
     let options = poise::FrameworkOptions {
-        commands: vec![commands::register(), commands::list_questions()],
+        commands: commands::commands(),
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("sex!".into()),
             edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(

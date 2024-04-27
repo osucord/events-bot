@@ -1,5 +1,6 @@
 use crate::Error;
 use parking_lot::RwLock;
+use poise::serenity_prelude::ChannelId;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 
@@ -11,6 +12,7 @@ pub struct Data {
 pub struct Question {
     pub question: String,
     pub answers: Vec<String>,
+    pub channel: Option<ChannelId>,
 }
 
 impl Data {
