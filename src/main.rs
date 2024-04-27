@@ -8,7 +8,8 @@ use std::{sync::Arc, time::Duration};
 mod commands;
 mod data;
 mod events;
-use data::Data;
+
+use data::{Data, EscapeRoom};
 
 use parking_lot::RwLock;
 
@@ -57,7 +58,10 @@ async fn main() {
     };
 
     let data = Data {
-        questions: RwLock::new(vec![]),
+        escape_room: RwLock::new(EscapeRoom {
+            active: false,
+            questions: vec![],
+        }),
     };
     // load questions.
     data.load_questions()

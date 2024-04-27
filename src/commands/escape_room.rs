@@ -15,11 +15,12 @@ pub async fn list_questions(ctx: Context<'_>) -> Result<(), Error> {
     let questions: String = {
         let data = ctx.data();
         let q = data
-            .questions
+            .escape_room
             .read()
+            .questions
             .iter()
             .enumerate()
-            .map(|(i, q)| format!("{}. {}", i, q.content))
+            .map(|(i, q)| format!("{i}. {}", q.content))
             .collect::<Vec<String>>()
             .join("\n");
         q

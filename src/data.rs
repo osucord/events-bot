@@ -5,7 +5,13 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 
 pub struct Data {
-    pub questions: RwLock<Vec<Question>>,
+    pub escape_room: RwLock<EscapeRoom>,
+}
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct EscapeRoom {
+    pub active: bool,
+    pub questions: Vec<Question>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -34,7 +40,7 @@ impl Data {
     fn _load_questions(&self, questions: &str) -> Result<(), Error> {
         match serde_json::from_str::<Vec<Question>>(questions) {
             Ok(questions) => {
-                *self.questions.write() = questions;
+                self.escape_room.write().questions = questions;
             }
             Err(_) => {
                 return Err("Cannot read questions!".into());
