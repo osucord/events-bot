@@ -19,7 +19,7 @@ pub async fn list_questions(ctx: Context<'_>) -> Result<(), Error> {
             .read()
             .iter()
             .enumerate()
-            .map(|(i, q)| format!("{}. {}", i, q.question))
+            .map(|(i, q)| format!("{}. {}", i, q.content))
             .collect::<Vec<String>>()
             .join("\n");
         q

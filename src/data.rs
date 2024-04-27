@@ -10,7 +10,7 @@ pub struct Data {
 
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Question {
-    pub question: String,
+    pub content: String,
     pub answers: Vec<String>,
     pub channel: Option<ChannelId>,
 }
