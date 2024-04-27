@@ -1,6 +1,6 @@
 mod checks;
-mod meta;
 mod escape_room;
+mod meta;
 
 pub fn commands() -> Vec<crate::Command> {
     escape_room::commands()

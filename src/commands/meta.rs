@@ -1,4 +1,4 @@
-use crate::{Context, Error, Command};
+use crate::{Command, Context, Error};
 
 // This checks for owner stuff internally, its not scawy.
 #[poise::command(prefix_command, hide_in_help)]
