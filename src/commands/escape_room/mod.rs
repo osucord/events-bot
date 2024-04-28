@@ -60,21 +60,12 @@ pub async fn list_questions(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn add_question(
     ctx: Context<'_>,
     content: String,
-    no_confirm: Option<bool>,
 ) -> Result<(), Error> {
     if check_duplicate_question(&ctx.data(), &content) {
         ctx.say("This is a duplicate to another question!").await?;
         return Ok(());
     }
 
-    // allow for skipping of the process to add answers.
-    // TODO: implement it.
-    if let Some(no_confirm) = no_confirm {
-        if no_confirm {
-            //
-            return Ok(());
-        }
-    }
     // Assign custom_ids for the buttons.
     let ctx_id = ctx.id();
     let add_answer_id = format!("{ctx_id}add");

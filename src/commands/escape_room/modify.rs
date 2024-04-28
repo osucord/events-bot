@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
-use crate::commands::escape_room::utils::{autocomplete_question, modify::handle_modification_confirm};
-use crate::data::{Data, Question};
+use crate::commands::escape_room::utils::{autocomplete_question, modify::{handle_modification_confirm, update_question_content}};
 use crate::{Command, Context, Error};
 
 use poise::serenity_prelude::{self as serenity, CreateActionRow};
@@ -20,7 +17,7 @@ use super::utils::{handle_add, handle_delete, update_message};
     guild_only,
     subcommands("modify_content", "answers")
 )]
-pub async fn modify_question(ctx: Context<'_>, question: String) -> Result<(), Error> {
+pub async fn modify_question(ctx: Context<'_>, #[rest] question: String) -> Result<(), Error> {
     // the base command can only be accessed through prefix.
     // so this just loops into the "answers" subcommand.
     answers_inner(ctx, question).await
@@ -48,6 +45,18 @@ pub async fn modify_content(
     }
 
     Ok(())
+}
+
+
+/// Modify a question.
+#[poise::command(prefix_command, slash_command)]
+pub async fn answers(
+    ctx: Context<'_>,
+    #[autocomplete = "autocomplete_question"]
+    #[rest]
+    question: String,
+) -> Result<(), Error> {
+    answers_inner(ctx, question).await
 }
 
 // The inner command to allow usage of this in the base command for prefixes.
@@ -131,42 +140,6 @@ async fn answers_inner(ctx: Context<'_>, question: String) -> Result<(), Error> 
     }
 
     Ok(())
-}
-
-/// Modify a question.
-#[poise::command(prefix_command, slash_command)]
-pub async fn answers(
-    ctx: Context<'_>,
-    #[autocomplete = "autocomplete_question"]
-    #[rest]
-    question: String,
-) -> Result<(), Error> {
-    answers_inner(ctx, question).await
-}
-
-fn update_question_content(
-    data: &Arc<Data>,
-    query: &str,
-    new_name: String,
-) -> Result<Question, Error> {
-    let mut room = data.escape_room.write();
-
-    let question = room.questions.iter().position(|q| q.content == query);
-    if room.questions.iter().any(|q| q.content == new_name) {
-        return Err("Duplicate question found!".into());
-    }
-
-    match question {
-        Some(index) => {
-            let q = &mut room.questions[index];
-            q.content = new_name;
-            let cloned_question = q.clone();
-            room.write_questions().unwrap();
-            Ok(cloned_question)
-        }
-
-        None => Err("Could not find question!".into()),
-    }
 }
 
 pub fn command() -> Command {
