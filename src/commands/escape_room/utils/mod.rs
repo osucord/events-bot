@@ -102,6 +102,8 @@ pub(super) async fn update_message(
         content: content.to_owned(),
         answers: answers.to_owned(),
         channel: None,
+        message: None,
+        custom_id: None,
     };
     let embed = question.as_embed();
 
@@ -125,6 +127,8 @@ pub(super) async fn handle_confirm(
             content: content.clone(),
             answers: answers.clone(),
             channel: None,
+            message: None,
+            custom_id: None,
         });
 
         escape_room.write_questions().unwrap();

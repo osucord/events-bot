@@ -1,12 +1,17 @@
 use crate::{Context, Error};
-use poise::serenity_prelude::{RoleId, Member, UserId};
+use poise::serenity_prelude::{Member, RoleId, UserId};
 
 pub async fn has_role(ctx: Context<'_>, check_role: RoleId) -> Result<bool, Error> {
     let has_role = match ctx {
         Context::Prefix(pctx) => {
             let roles = match &pctx.msg.member {
                 Some(member) => &member.roles,
-                None => &get_member(ctx, ctx.author().id).await.unwrap_or_default().roles,
+                None => {
+                    &get_member(ctx, ctx.author().id)
+                        .await
+                        .unwrap_or_default()
+                        .roles
+                }
             };
 
             roles.contains(&check_role)
@@ -34,7 +39,7 @@ pub async fn has_event_committee(ctx: Context<'_>) -> Result<bool, Error> {
 /// access I have chosen to avoid it.
 async fn get_member(ctx: Context<'_>, user_id: UserId) -> Option<Member> {
     if let Some(member) = get_cached_member(ctx, user_id) {
-        return Some(member)
+        return Some(member);
     };
 
     let guild_id = ctx.guild_id()?;

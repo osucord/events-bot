@@ -174,6 +174,5 @@ pub async fn reorder(
         Err(e) => ctx.say(e.to_string()).await?,
     };
 
-
     Ok(())
 }
