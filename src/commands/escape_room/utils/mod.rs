@@ -1,6 +1,6 @@
 use crate::{data::Question, Context, Data, Error};
 use ::serenity::futures::{self, Stream, StreamExt};
-use poise::serenity_prelude::{self as serenity, ComponentInteraction, CreateEmbed};
+use poise::serenity_prelude::{self as serenity, ComponentInteraction};
 use poise::ReplyHandle;
 use std::fmt::Write;
 
@@ -95,23 +95,13 @@ pub(super) async fn update_message(
     content: &str,
     answers: &[String],
 ) -> Result<(), Error> {
-    let description = if answers.is_empty() {
-        format!("{content}\n\n Don't forget to add some answers below!")
-    } else {
-        let answers_str = answers
-            .iter()
-            .enumerate()
-            .fold(String::new(), |mut acc, (i, a)| {
-                writeln!(acc, "{i}. {a}").unwrap();
-                acc
-            });
-
-        format!("{content}\n\n **Answers:**\n{answers_str}")
+    // Maybe I should just pass around a Question to begin with lol.
+    let question = Question {
+        content: content.to_owned(),
+        answers: answers.to_owned(),
+        channel: None,
     };
-
-    let embed = CreateEmbed::new()
-        .title("Add a question?")
-        .description(description);
+    let embed = question.as_embed();
 
     msg.edit(ctx, poise::CreateReply::new().embed(embed))
         .await?;

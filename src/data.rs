@@ -16,7 +16,7 @@ pub struct EscapeRoom {
     pub questions: Vec<Question>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct Question {
     pub content: String,
     pub answers: Vec<String>,

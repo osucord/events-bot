@@ -96,9 +96,7 @@ pub async fn add_question(
     let def_description = format!("{content}\n\n Don't forget to add some answers below!");
 
     // The embed.
-    let embed = CreateEmbed::new()
-        .title("Add a question?")
-        .description(def_description);
+    let embed = CreateEmbed::new().description(def_description);
     // The message builder.
     let builder = poise::CreateReply::default()
         .embed(embed)
