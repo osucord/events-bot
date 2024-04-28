@@ -1,4 +1,4 @@
-use crate::{Context, Data, Error, data::Question};
+use crate::{data::Question, Context, Data, Error};
 use poise::serenity_prelude::{self as serenity, ComponentInteraction};
 use std::sync::Arc;
 

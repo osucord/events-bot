@@ -1,9 +1,11 @@
-use crate::commands::escape_room::utils::{autocomplete_question, modify::{handle_modification_confirm, update_question_content}};
-use crate::{Command, Context, Error};
+use crate::commands::escape_room::utils::{
+    autocomplete_question,
+    modify::{handle_modification_confirm, update_question_content},
+};
+use crate::{Context, Error};
 
 use poise::serenity_prelude::{self as serenity, CreateActionRow};
 use std::time::Duration;
-
 
 use crate::commands::checks::has_event_committee;
 
@@ -46,7 +48,6 @@ pub async fn modify_content(
 
     Ok(())
 }
-
 
 /// Modify a question.
 #[poise::command(prefix_command, slash_command)]
@@ -142,6 +143,37 @@ async fn answers_inner(ctx: Context<'_>, question: String) -> Result<(), Error> 
     Ok(())
 }
 
-pub fn command() -> Command {
-    modify_question()
+/// Reorder questions
+#[poise::command(prefix_command, slash_command)]
+pub async fn reorder(
+    ctx: Context<'_>,
+    #[autocomplete = "autocomplete_question"] question: String,
+    mut index: usize,
+) -> Result<(), Error> {
+    // human index to computer index (computer start at 0)
+    index -= 1;
+
+    let result = {
+        let data = ctx.data();
+        let mut room = data.escape_room.write();
+
+        let question_index = room.questions.iter().position(|q| q.content == question);
+
+        if let Some(question_index) = question_index {
+            let question = room.questions.remove(question_index);
+            room.questions.insert(index, question);
+            room.write_questions()?;
+            Ok(())
+        } else {
+            Err("Could not find question.")
+        }
+    };
+
+    match result {
+        Ok(()) => ctx.say("Successfully moved question!").await?,
+        Err(e) => ctx.say(e.to_string()).await?,
+    };
+
+
+    Ok(())
 }

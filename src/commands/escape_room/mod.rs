@@ -57,10 +57,7 @@ pub async fn list_questions(ctx: Context<'_>) -> Result<(), Error> {
     slash_command,
     guild_only
 )]
-pub async fn add_question(
-    ctx: Context<'_>,
-    content: String,
-) -> Result<(), Error> {
+pub async fn add_question(ctx: Context<'_>, content: String) -> Result<(), Error> {
     if check_duplicate_question(&ctx.data(), &content) {
         ctx.say("This is a duplicate to another question!").await?;
         return Ok(());
@@ -137,6 +134,11 @@ pub async fn add_question(
     Ok(())
 }
 
-pub fn commands() -> [Command; 3] {
-    [list_questions(), add_question(), modify::command()]
+pub fn commands() -> [Command; 4] {
+    [
+        list_questions(),
+        add_question(),
+        modify::modify_question(),
+        modify::reorder(),
+    ]
 }
