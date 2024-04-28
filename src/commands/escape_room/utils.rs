@@ -1,7 +1,38 @@
-use crate::{data::Question, Context, Error};
+use crate::{data::Question, Context, Data, Error};
+use ::serenity::futures::{self, Stream, StreamExt};
 use poise::serenity_prelude::{self as serenity, ComponentInteraction, CreateEmbed};
 use poise::ReplyHandle;
 use std::fmt::Write;
+
+use std::sync::Arc;
+use std::time::Duration;
+
+#[allow(clippy::unused_async)]
+pub(super) async fn autocomplete_question<'a>(
+    ctx: Context<'_>,
+    partial: &'a str,
+) -> impl Stream<Item = String> + 'a {
+    let data = ctx.data();
+    let list: Vec<String> = data
+        .escape_room
+        .read()
+        .questions
+        .iter()
+        .map(|q| q.content.clone())
+        .collect();
+
+    futures::stream::iter(list)
+        .filter(move |name| futures::future::ready(name.starts_with(partial)))
+        .map(|name| name.to_string())
+}
+
+pub(super) fn check_duplicate_question(data: &Arc<Data>, content: &str) -> bool {
+    data.escape_room
+        .read()
+        .questions
+        .iter()
+        .any(|q| q.content == content)
+}
 
 pub(super) async fn handle_add(
     ctx: Context<'_>,
@@ -11,7 +42,7 @@ pub(super) async fn handle_add(
         ctx.serenity_context(),
         press,
         None,
-        Some(std::time::Duration::from_secs(30)),
+        Some(Duration::from_secs(30)),
     )
     .await;
 
@@ -41,7 +72,7 @@ pub(super) async fn handle_delete(
         ctx.serenity_context(),
         press,
         None,
-        Some(std::time::Duration::from_secs(30)),
+        Some(Duration::from_secs(30)),
     )
     .await;
 

@@ -1,8 +1,13 @@
+use std::time::Duration;
+
 use crate::{Command, Context, Error};
 use poise::serenity_prelude::{self as serenity, CreateActionRow, CreateEmbed};
 
+mod modify;
 mod utils;
 use utils::{handle_add, handle_confirm, handle_delete, update_message};
+
+use self::utils::check_duplicate_question;
 
 use super::checks::has_event_committee;
 
@@ -57,6 +62,11 @@ pub async fn add_question(
     content: String,
     no_confirm: Option<bool>,
 ) -> Result<(), Error> {
+    if check_duplicate_question(&ctx.data(), &content) {
+        ctx.say("This is a duplicate to another question!").await?;
+        return Ok(());
+    }
+
     // allow for skipping of the process to add answers.
     // TODO: implement it.
     if let Some(no_confirm) = no_confirm {
@@ -65,12 +75,13 @@ pub async fn add_question(
             return Ok(());
         }
     }
-
+    // Assign custom_ids for the buttons.
     let ctx_id = ctx.id();
     let add_answer_id = format!("{ctx_id}add");
     let delete_answer_id = format!("{ctx_id}delete");
     let confirm_id = format!("{ctx_id}confirm");
 
+    // Assign the actual buttons.
     let components = vec![CreateActionRow::Buttons(vec![
         serenity::CreateButton::new(&add_answer_id).label("Add answer"),
         serenity::CreateButton::new(&delete_answer_id)
@@ -81,26 +92,32 @@ pub async fn add_question(
             .style(serenity::ButtonStyle::Success),
     ])];
 
+    // A default description to be used for the embed.
     let def_description = format!("{content}\n\n Don't forget to add some answers below!");
 
+    // The embed.
     let embed = CreateEmbed::new()
         .title("Add a question?")
         .description(def_description);
+    // The message builder.
     let builder = poise::CreateReply::default()
         .embed(embed)
         .components(components);
 
+    // The message and its reply handle.
     let msg = ctx.send(builder).await?;
 
+    // The answers that will be mutated before confirm.
     let mut answers = vec![];
 
+    // Stops it saying timeout if it has already been confirmed for the last time.
     let mut confirmed = false;
 
     // spawn collector to handle interactions.
     while let Some(press) =
         serenity::ComponentInteractionCollector::new(ctx.serenity_context().shard.clone())
             .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-            .timeout(std::time::Duration::from_secs(300))
+            .timeout(Duration::from_secs(300))
             .await
     {
         let custom_id = press.data.custom_id.as_str();
@@ -122,7 +139,7 @@ pub async fn add_question(
         };
     }
 
-    // triggers on timeout.
+    // If it was never confirmed and it timed out, this will happen.
     if !confirmed {
         msg.edit(ctx, poise::CreateReply::new().content("Timeout :<"))
             .await?;
@@ -131,6 +148,6 @@ pub async fn add_question(
     Ok(())
 }
 
-pub fn commands() -> [Command; 2] {
-    [list_questions(), add_question()]
+pub fn commands() -> [Command; 3] {
+    [list_questions(), add_question(), modify::command()]
 }

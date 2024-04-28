@@ -1,7 +1,9 @@
 use crate::Error;
 use parking_lot::RwLock;
 use poise::serenity_prelude::ChannelId;
+use poise::serenity_prelude::{Colour, CreateEmbed};
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 
 pub struct Data {
     pub escape_room: RwLock<EscapeRoom>,
@@ -14,11 +16,29 @@ pub struct EscapeRoom {
     pub questions: Vec<Question>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Question {
     pub content: String,
     pub answers: Vec<String>,
     pub channel: Option<ChannelId>,
+}
+
+impl Question {
+    pub fn as_embed(&self) -> CreateEmbed {
+        let answers_str = self
+            .answers
+            .iter()
+            .enumerate()
+            .fold(String::new(), |mut acc, (i, a)| {
+                writeln!(acc, "{i}. {a}").unwrap();
+                acc
+            });
+
+        CreateEmbed::new()
+            .title(&self.content)
+            .description(answers_str)
+            .colour(Colour::BLUE)
+    }
 }
 
 impl EscapeRoom {
