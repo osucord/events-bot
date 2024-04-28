@@ -7,6 +7,8 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub(super) mod modify;
+
 #[allow(clippy::unused_async)]
 pub(super) async fn autocomplete_question<'a>(
     ctx: Context<'_>,
