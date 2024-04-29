@@ -12,7 +12,6 @@ pub struct Data {
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct EscapeRoom {
     pub active: bool,
-    pub category: Option<ChannelId>,
     pub questions: Vec<Question>,
 }
 
