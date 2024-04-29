@@ -98,13 +98,7 @@ pub(super) async fn update_message(
     answers: &[String],
 ) -> Result<(), Error> {
     // Maybe I should just pass around a Question to begin with lol.
-    let question = Question {
-        content: content.to_owned(),
-        answers: answers.to_owned(),
-        channel: None,
-        message: None,
-        custom_id: None,
-    };
+    let question = Question::new(content.to_owned(), answers.to_owned());
     let embed = question.as_embed();
 
     msg.edit(ctx, poise::CreateReply::new().embed(embed))
@@ -123,13 +117,9 @@ pub(super) async fn handle_confirm(
         let data = ctx.data();
         let mut escape_room = data.escape_room.write();
 
-        escape_room.questions.push(Question {
-            content: content.clone(),
-            answers: answers.clone(),
-            channel: None,
-            message: None,
-            custom_id: None,
-        });
+        escape_room
+            .questions
+            .push(Question::new(content.clone(), answers.clone()));
 
         escape_room.write_questions().unwrap();
     }

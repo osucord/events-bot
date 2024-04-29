@@ -4,6 +4,7 @@ use crate::{Command, Context, Error};
 use poise::serenity_prelude::{self as serenity, CreateActionRow, CreateEmbed};
 
 mod modify;
+mod setup;
 mod utils;
 use utils::{handle_add, handle_confirm, handle_delete, update_message};
 
@@ -134,62 +135,12 @@ pub async fn add_question(ctx: Context<'_>, content: String) -> Result<(), Error
     Ok(())
 }
 
-
-
-#[poise::command(check = "has_event_committee", prefix_command, guild_only)]
-pub async fn test(ctx: Context<'_>, mut index: usize) -> Result<(), Error> {
-    // human to computer indexing
-    index -= 1;
-
-    let ctx_id = ctx.id();
-    let custom_id = format!("{ctx_id}_{index}");
-
-    let result = {
-        let data = ctx.data();
-        let mut room = data.escape_room.write();
-
-        let result = if let Some(question) = room.questions.get_mut(index) {
-            question.channel = Some(ctx.channel_id());
-            question.custom_id = Some(custom_id.clone());
-
-            Some(question.clone())
-        } else {
-            None // Return None if the index is out of range
-        };
-
-        room.write_questions().unwrap();
-
-        result
-    };
-
-    let Some(question) = result else {
-        ctx.say("Cannot find question at index!").await?;
-        return Ok(());
-    };
-
-    let components = vec![CreateActionRow::Buttons(vec![serenity::CreateButton::new(
-        custom_id,
-    )
-    .label("Submit Answer")])];
-
-    let embed = CreateEmbed::new()
-        // back to human.
-        .title(format!("Question #{}", index + 1))
-        .description(question.content);
-    let builder = poise::CreateReply::new()
-        .embed(embed)
-        .components(components);
-    ctx.send(builder).await?;
-
-    Ok(())
-}
-
 pub fn commands() -> [Command; 5] {
     [
         list_questions(),
         add_question(),
         modify::modify_question(),
         modify::reorder(),
-        test()
+        setup::setup(),
     ]
 }

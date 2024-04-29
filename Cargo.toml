@@ -23,3 +23,7 @@ branch = "next"
 git = "https://github.com/serenity-rs/poise"
 features = ["cache"]
 branch = "serenity-next"
+
+[patch."https://github.com/serenity-rs/serenity".serenity]
+git = "https://github.com/jamesbt365/serenity"
+branch = "invalid-permissions-half-fix"

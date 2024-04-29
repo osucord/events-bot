@@ -37,7 +37,7 @@ pub async fn has_event_committee(ctx: Context<'_>) -> Result<bool, Error> {
 ///
 /// I know I could use `GuildId::member` but the way serenity is going with cache
 /// access I have chosen to avoid it.
-async fn get_member(ctx: Context<'_>, user_id: UserId) -> Option<Member> {
+pub async fn get_member(ctx: Context<'_>, user_id: UserId) -> Option<Member> {
     if let Some(member) = get_cached_member(ctx, user_id) {
         return Some(member);
     };

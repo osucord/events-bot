@@ -3,7 +3,6 @@ use parking_lot::RwLock;
 use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::{Colour, CreateEmbed};
 use serde::{Deserialize, Serialize};
-use serenity::all::MessageId;
 use std::fmt::Write;
 
 pub struct Data {
@@ -22,11 +21,20 @@ pub struct Question {
     pub content: String,
     pub answers: Vec<String>,
     pub channel: Option<ChannelId>,
-    pub message: Option<MessageId>,
     pub custom_id: Option<String>,
 }
 
 impl Question {
+    pub fn new(content: String, answers: Vec<String>) -> Self {
+        Question {
+            content,
+            answers,
+            channel: None,
+            custom_id: None,
+        }
+    }
+
+    /// produce an embed with the answers.
     pub fn as_embed(&self) -> CreateEmbed {
         let answers_str = self
             .answers
