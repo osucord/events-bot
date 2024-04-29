@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{Command, Context, Error};
+use crate::{commands::escape_room::utils::autocomplete_question, Command, Context, Error};
 use poise::serenity_prelude::{self as serenity, CreateActionRow, CreateEmbed};
 
 mod modify;
@@ -15,6 +15,7 @@ use super::checks::has_event_committee;
 /// List questions for active escape room.
 #[poise::command(
     rename = "list-questions",
+    aliases("details"),
     check = "has_event_committee",
     prefix_command,
     slash_command,
@@ -46,6 +47,46 @@ pub async fn list_questions(ctx: Context<'_>) -> Result<(), Error> {
     let builder = poise::CreateReply::default().embed(embed);
 
     ctx.send(builder).await?;
+
+    Ok(())
+}
+
+/// List questions for active escape room.
+#[poise::command(
+    rename = "list-question-details",
+    aliases("details"),
+    check = "has_event_committee",
+    prefix_command,
+    slash_command,
+    guild_only
+)]
+pub async fn list_question_details(
+    ctx: Context<'_>,
+    #[autocomplete = "autocomplete_question"]
+    #[rest]
+    question: String,
+) -> Result<(), Error> {
+    let question = {
+        let data = ctx.data();
+        let room = data.escape_room.read();
+        let q = room
+            .questions
+            .iter()
+            .find(|q| q.content == question)
+            .cloned();
+        q
+    };
+
+    let Some(question) = question else {
+        ctx.say("That is not a valid question!").await?;
+        return Ok(());
+    };
+
+    let embed = question.as_embed();
+    let builder = poise::CreateReply::default().embed(embed);
+
+    ctx.send(builder).await?;
+
 
     Ok(())
 }
@@ -135,9 +176,10 @@ pub async fn add_question(ctx: Context<'_>, content: String) -> Result<(), Error
     Ok(())
 }
 
-pub fn commands() -> [Command; 6] {
+pub fn commands() -> [Command; 7] {
     [
         list_questions(),
+        list_question_details(),
         add_question(),
         modify::modify_question(),
         modify::reorder(),

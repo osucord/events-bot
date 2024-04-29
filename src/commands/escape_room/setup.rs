@@ -7,7 +7,7 @@ use poise::serenity_prelude::{
     GuildId, PermissionOverwrite, PermissionOverwriteType, Permissions, UserId,
 };
 
-/// Start the setup process.
+/// Start the escape room!
 #[poise::command(
     aliases("start"),
     prefix_command,
@@ -19,6 +19,7 @@ pub async fn activate(
     ctx: Context<'_>,
     #[description = "Start the escape room!"] activate: Option<bool>,
 ) -> Result<(), Error> {
+    // TODO: open the front gates and allow users to start.
     if let Some(activate) = activate {
         if activate {
             ctx.data().set_status(true);

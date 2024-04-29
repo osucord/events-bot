@@ -83,8 +83,14 @@ impl Data {
         self.escape_room.read().active
     }
 
-    pub fn set_status(&self, active: bool) {
-        self.escape_room.write().active = active;
+    /// Set the current status of the escape room.
+    ///
+    /// Returns the old value.
+    pub fn set_status(&self, active: bool) -> bool {
+        let mut room = self.escape_room.write();
+        let old = room.active;
+        room.active = active;
+        old
     }
 
     fn _load_questions(&self, questions: &str) -> Result<(), Error> {
