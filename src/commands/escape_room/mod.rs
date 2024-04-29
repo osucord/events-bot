@@ -135,12 +135,13 @@ pub async fn add_question(ctx: Context<'_>, content: String) -> Result<(), Error
     Ok(())
 }
 
-pub fn commands() -> [Command; 5] {
+pub fn commands() -> [Command; 6] {
     [
         list_questions(),
         add_question(),
         modify::modify_question(),
         modify::reorder(),
         setup::setup(),
+        setup::activate(),
     ]
 }

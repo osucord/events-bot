@@ -7,7 +7,7 @@ use crate::{Context, Error};
 use poise::serenity_prelude::{self as serenity, CreateActionRow};
 use std::time::Duration;
 
-use crate::commands::checks::has_event_committee;
+use crate::commands::checks::{has_event_committee, not_active};
 
 use super::utils::{handle_add, handle_delete, update_message};
 
@@ -26,7 +26,12 @@ pub async fn modify_question(ctx: Context<'_>, #[rest] question: String) -> Resu
 }
 
 /// Modify the content of a question.
-#[poise::command(rename = "content", prefix_command, slash_command)]
+#[poise::command(
+    rename = "content",
+    prefix_command,
+    slash_command,
+    check = "not_active"
+)]
 pub async fn modify_content(
     ctx: Context<'_>,
     #[autocomplete = "autocomplete_question"] question: String,
@@ -144,7 +149,7 @@ async fn answers_inner(ctx: Context<'_>, question: String) -> Result<(), Error> 
 }
 
 /// Reorder questions
-#[poise::command(prefix_command, slash_command)]
+#[poise::command(prefix_command, slash_command, check = "not_active")]
 pub async fn reorder(
     ctx: Context<'_>,
     #[autocomplete = "autocomplete_question"] question: String,

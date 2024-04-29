@@ -33,6 +33,21 @@ pub async fn has_event_committee(ctx: Context<'_>) -> Result<bool, Error> {
     has_role(ctx, RoleId::new(1199033047501242439)).await
 }
 
+#[allow(clippy::unused_async)]
+pub async fn not_active(ctx: Context<'_>) -> Result<bool, Error> {
+    let active = {
+        let data = ctx.data();
+        let active = data.escape_room.read().active;
+        active
+    };
+
+    if active {
+        return Err("This is forbidden while an escape room is active!".into());
+    }
+
+    Ok(true)
+}
+
 /// Helper function for getting a member.
 ///
 /// I know I could use `GuildId::member` but the way serenity is going with cache

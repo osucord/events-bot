@@ -78,6 +78,15 @@ impl Data {
         Ok(())
     }
 
+    /// Get if the escape room is active.
+    pub fn get_status(&self) -> bool {
+        self.escape_room.read().active
+    }
+
+    pub fn set_status(&self, active: bool) {
+        self.escape_room.write().active = active;
+    }
+
     fn _load_questions(&self, questions: &str) -> Result<(), Error> {
         match serde_json::from_str::<EscapeRoom>(questions) {
             Ok(config) => {

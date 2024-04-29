@@ -53,7 +53,6 @@ async fn main() {
             ..Default::default()
         },
         on_error: |error| Box::pin(on_error(error)),
-        skip_checks_for_owners: true, // Debugging.
         event_handler: |framework, event| Box::pin(events::handler(event, framework)),
         ..Default::default()
     };

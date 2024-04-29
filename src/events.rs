@@ -31,6 +31,12 @@ async fn handle_component(
         let data = framework.user_data();
         // will use &str later.
         let room = data.escape_room.read();
+
+        // If its not active, don't allow interactions to run.
+        if !room.active {
+            return Ok(());
+        };
+
         let custom_id = press.data.custom_id.to_string(); // Extract custom_id before closure
         let q = room
             .questions

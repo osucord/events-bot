@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::commands::checks::get_member;
+use crate::commands::checks::{get_member, not_active};
 use crate::{Context, Data, Error};
 use poise::serenity_prelude::{
     self as serenity, ChannelId, ChannelType, Colour, CreateActionRow, CreateEmbed, GuildChannel,
@@ -8,7 +8,49 @@ use poise::serenity_prelude::{
 };
 
 /// Start the setup process.
-#[poise::command(prefix_command, slash_command, owners_only, guild_only)]
+#[poise::command(
+    aliases("start"),
+    prefix_command,
+    slash_command,
+    owners_only,
+    guild_only
+)]
+pub async fn activate(
+    ctx: Context<'_>,
+    #[description = "Start the escape room!"] activate: Option<bool>,
+) -> Result<(), Error> {
+    if let Some(activate) = activate {
+        if activate {
+            ctx.data().set_status(true);
+            ctx.say("Activated the escape room and its interactions, good luck!")
+                .await?;
+            return Ok(());
+        }
+
+        ctx.data().set_status(false);
+        ctx.say("Deactivated the escape room!").await?;
+        return Ok(());
+    };
+
+    // the user didn't specify, show the currest status.
+    let status = if ctx.data().get_status() {
+        "active"
+    } else {
+        "not active"
+    };
+    ctx.say(format!("current escape room is {status}")).await?;
+
+    Ok(())
+}
+
+/// Start the setup process.
+#[poise::command(
+    prefix_command,
+    slash_command,
+    owners_only,
+    guild_only,
+    check = "not_active"
+)]
 pub async fn setup(
     ctx: Context<'_>,
     category: GuildChannel,
@@ -62,9 +104,7 @@ pub async fn setup(
         return Ok(());
     }
 
-    setup_channels(ctx, ctx.guild_id().unwrap(), category.id, bot_id).await?;
-
-    Ok(())
+    setup_channels(ctx, ctx.guild_id().unwrap(), category.id, bot_id).await
 }
 
 fn check_setup(data: &Arc<Data>) -> bool {
@@ -95,6 +135,7 @@ async fn setup_channels(
 
     // Used for the question numbers.
     let mut index = 1;
+
     #[allow(clippy::cast_possible_truncation)] // we don't have 65535 questions.
     let mut pos = questions.len() as u16;
 
