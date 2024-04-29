@@ -51,7 +51,7 @@ pub async fn list_questions(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// List questions for active escape room.
+/// List the details about a specific question!
 #[poise::command(
     rename = "list-question-details",
     aliases("details"),
@@ -86,7 +86,6 @@ pub async fn list_question_details(
     let builder = poise::CreateReply::default().embed(embed);
 
     ctx.send(builder).await?;
-
 
     Ok(())
 }

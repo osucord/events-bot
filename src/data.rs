@@ -36,14 +36,23 @@ impl Question {
 
     /// produce an embed with the answers.
     pub fn as_embed(&self) -> CreateEmbed {
+        let def_str = "**Answers:**\n";
+        let def = String::from(def_str);
+
         let answers_str = self
             .answers
             .iter()
             .enumerate()
-            .fold(String::new(), |mut acc, (i, a)| {
+            .fold(def, |mut acc, (i, a)| {
                 writeln!(acc, "{i}. {a}").unwrap();
                 acc
             });
+
+        let answers_str = if answers_str == def_str {
+            String::from("There are no answers!")
+        } else {
+            answers_str
+        };
 
         CreateEmbed::new()
             .title(&self.content)

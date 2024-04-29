@@ -55,8 +55,7 @@ pub async fn activate(
 pub async fn setup(
     ctx: Context<'_>,
     category: GuildChannel,
-    #[description = "Overwrite checks for if the escape room is currently setup."]
-    no_prompt: Option<bool>,
+    #[description = "Overwrite pre-setup checks."] no_prompt: Option<bool>,
 ) -> Result<(), Error> {
     if category.kind != ChannelType::Category {
         ctx.say("The selected channel is not a Category!").await?;
@@ -95,24 +94,41 @@ pub async fn setup(
         return Ok(());
     }
 
-    // Check if partially/fully setup.
-    // TODO: check if escape room is active, NEVER let this happen if so.
-    if !no_prompt.unwrap_or(false) && check_setup(&ctx.data()) {
-        ctx.say(
-            "I already am partially/fully setup!, Set `no_prompt` if you know what you are doing!",
-        )
-        .await?;
-        return Ok(());
+    let (setup, any_unanswerable) = check_setup(&ctx.data());
+
+    if !no_prompt.unwrap_or(false) {
+        match (setup, any_unanswerable) {
+            // happy path.
+            (false, false) => {}
+            (true, false) => {
+                ctx.say("The bot is currently setup!").await?;
+                return Ok(());
+            }
+            (false, true) => {
+                ctx.say("Some questions are not answerable!").await?;
+                return Ok(());
+            }
+            (true, true) => {
+                ctx.say("The bot is currently setup and some questions can't be answered!")
+                    .await?;
+                return Ok(());
+            }
+        }
     }
 
     setup_channels(ctx, ctx.guild_id().unwrap(), category.id, bot_id).await
 }
 
-fn check_setup(data: &Arc<Data>) -> bool {
+fn check_setup(data: &Arc<Data>) -> (bool, bool) {
     let room = data.escape_room.read();
-    room.questions
+    let setup = room
+        .questions
         .iter()
-        .any(|q| q.channel.is_some() || q.custom_id.is_some())
+        .any(|q| q.channel.is_some() || q.custom_id.is_some());
+
+    let unanswerable = room.questions.iter().any(|q| q.answers.is_empty());
+
+    (setup, unanswerable)
 }
 
 async fn setup_channels(
@@ -121,14 +137,19 @@ async fn setup_channels(
     category_id: ChannelId,
     bot_id: UserId,
 ) -> Result<(), Error> {
-    ctx.say("setting up!").await?;
-
     // get questions, need to clone to await.
     let mut questions = {
         let data = ctx.data();
         let q = data.escape_room.read().questions.clone();
         q
     };
+
+    if questions.is_empty() {
+        ctx.say("There isn't any questions!").await?;
+        return Ok(());
+    };
+
+    ctx.say("setting up!").await?;
 
     let ctx_id = ctx.id();
 
