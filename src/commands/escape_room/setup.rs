@@ -1,11 +1,21 @@
 use std::sync::Arc;
 
 use crate::commands::checks::{get_member, not_active};
+use crate::commands::escape_room::utils::activate::unlock_first_channel;
 use crate::{Context, Data, Error};
 use poise::serenity_prelude::{
     self as serenity, ChannelId, ChannelType, Colour, CreateActionRow, CreateEmbed, GuildChannel,
     GuildId, PermissionOverwrite, PermissionOverwriteType, Permissions, UserId,
 };
+
+
+fn get_required_bot_perms() -> Permissions {
+    get_deny_perms() | Permissions::MANAGE_CHANNELS
+}
+
+fn get_deny_perms() -> Permissions {
+    Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES | Permissions::ADD_REACTIONS | Permissions::MANAGE_MESSAGES
+}
 
 /// Start the escape room!
 #[poise::command(
@@ -22,14 +32,21 @@ pub async fn activate(
     // TODO: open the front gates and allow users to start.
     if let Some(activate) = activate {
         if activate {
-            ctx.data().set_status(true);
-            ctx.say("Activated the escape room and its interactions, good luck!")
-                .await?;
+            match unlock_first_channel(ctx).await {
+                Ok(()) => {
+                    ctx.say("Activating the escape room and all interactions, Good luck!").await?;
+                    ctx.data().set_status(true);
+                },
+                Err(e) => { ctx.say(e.to_string()).await?; }
+            };
+
             return Ok(());
         }
 
+
         ctx.data().set_status(false);
         ctx.say("Deactivated the escape room!").await?;
+        // TODO: lock escape room, but that would require tracking user progress.
         return Ok(());
     };
 
@@ -69,7 +86,7 @@ pub async fn setup(
         return Ok(());
     };
 
-    let (permissions, empty_category) = {
+    let (permissions, has_manage_roles, empty_category) = {
         let Some(guild) = ctx.guild() else {
             ctx.say("Unable to check guild cache.").await?;
             return Ok(());
@@ -80,14 +97,25 @@ pub async fn setup(
             .iter()
             .any(|c| c.parent_id == Some(category.id));
 
-        (guild.user_permissions_in(&category, &member), empty)
+        let member_perms = guild.member_permissions(&member);
+
+        (guild.user_permissions_in(&category, &member), member_perms.manage_roles(), empty)
     };
 
-    if !permissions.manage_channels() {
-        ctx.say("I need at least `MANAGE_CHANNELS` to do this!")
+
+    if !has_manage_roles {
+        ctx.say("I don't have manage roles, I need this on my user, not on the category!").await?;
+        return Ok(())
+    }
+
+    let required = get_required_bot_perms();
+    let missing_permissions = required & !permissions;
+    if missing_permissions.bits() != 0 {
+        ctx.say(format!("I need at least {required} on the category to do this!\n\n I am missing {missing_permissions}"))
             .await?;
         return Ok(());
     }
+
 
     if !empty_category {
         ctx.say("The category should be empty!").await?;
@@ -193,13 +221,14 @@ async fn setup_channels(
 
         channel.send_message(ctx, builder).await?;
 
-        pos -= 1;
         index += 1;
+        pos -= 1;
     }
 
     {
         let data = ctx.data();
         let mut room = data.escape_room.write();
+        room.guild = ctx.guild_id();
         room.questions = questions;
         room.write_questions().unwrap();
     }
@@ -210,8 +239,8 @@ async fn setup_channels(
 }
 
 fn get_perm_overwrites(guild_id: GuildId, bot_id: UserId) -> [PermissionOverwrite; 2] {
-    // should deny manage messages too but the bot doesn't have thus can't do it.
-    let deny = Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES | Permissions::ADD_REACTIONS;
+    let deny = Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES | Permissions::ADD_REACTIONS | Permissions::MANAGE_MESSAGES;
+    let bot_allow = deny | Permissions::MANAGE_CHANNELS;
 
     [
         PermissionOverwrite {
@@ -220,7 +249,7 @@ fn get_perm_overwrites(guild_id: GuildId, bot_id: UserId) -> [PermissionOverwrit
             kind: PermissionOverwriteType::Role(guild_id.get().into()),
         },
         PermissionOverwrite {
-            allow: deny, // the bot needs these perms.
+            allow: bot_allow, // the bot needs these perms.
             deny: Permissions::empty(),
             kind: PermissionOverwriteType::Member(bot_id),
         },

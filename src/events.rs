@@ -4,7 +4,6 @@ use poise::serenity_prelude::{
     self as serenity, ComponentInteraction, CreateInteractionResponseFollowup,
 };
 
-#[allow(clippy::missing_errors_doc)]
 pub async fn handler(
     event: &serenity::FullEvent,
     framework: FrameworkContext<'_>,
@@ -60,20 +59,24 @@ async fn handle_component(
         .iter()
         .any(|a| a.eq_ignore_ascii_case(&answer));
 
-    let content = if matches_answer {
-        format!("{answer} was a right answer!")
-    } else {
-        format!("{answer} was not a right answer!")
-    };
 
-    press
-        .create_followup(
-            framework.serenity_context.http(),
-            CreateInteractionResponseFollowup::new()
-                .ephemeral(true)
-                .content(content),
-        )
-        .await?;
+
+        if !matches_answer {
+            press
+            .create_followup(
+                framework.serenity_context.http(),
+                CreateInteractionResponseFollowup::new()
+                    .ephemeral(true)
+                    .content(format!("{answer} was not a right answer!")),
+            )
+            .await?;
+
+            return Ok(())
+        }
+
+        // Matches answer.
+
+
 
     Ok(())
 }

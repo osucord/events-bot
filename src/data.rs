@@ -1,7 +1,6 @@
 use crate::Error;
 use parking_lot::RwLock;
-use poise::serenity_prelude::ChannelId;
-use poise::serenity_prelude::{Colour, CreateEmbed};
+use poise::serenity_prelude::{Colour, CreateEmbed, ChannelId, UserId, GuildId};
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 
@@ -12,6 +11,8 @@ pub struct Data {
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct EscapeRoom {
     pub active: bool,
+    pub guild: Option<GuildId>,
+    pub winner: Option<UserId>,
     pub questions: Vec<Question>,
 }
 
@@ -98,6 +99,7 @@ impl Data {
         let mut room = self.escape_room.write();
         let old = room.active;
         room.active = active;
+        room.write_questions().unwrap();
         old
     }
 
@@ -106,6 +108,8 @@ impl Data {
             Ok(config) => {
                 let mut escape_room = self.escape_room.write();
 
+                escape_room.winner = config.winner;
+                escape_room.guild = config.guild;
                 escape_room.active = config.active;
                 escape_room.questions = config.questions;
             }
