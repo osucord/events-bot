@@ -9,6 +9,8 @@ use poise::serenity_prelude::{
 };
 
 
+/// Additionally the bot require `MANAGE_ROLES`, but for some reason this is required
+/// ON the actual roles and not a permission overwrite.
 fn get_required_bot_perms() -> Permissions {
     get_deny_perms() | Permissions::MANAGE_CHANNELS
 }
@@ -29,7 +31,6 @@ pub async fn activate(
     ctx: Context<'_>,
     #[description = "Start the escape room!"] activate: Option<bool>,
 ) -> Result<(), Error> {
-    // TODO: open the front gates and allow users to start.
     if let Some(activate) = activate {
         if activate {
             match unlock_first_channel(ctx).await {
