@@ -8,7 +8,6 @@ use poise::serenity_prelude::{
     GuildId, PermissionOverwrite, PermissionOverwriteType, Permissions, UserId,
 };
 
-
 /// Additionally the bot require `MANAGE_ROLES`, but for some reason this is required
 /// ON the actual roles and not a permission overwrite.
 fn get_required_bot_perms() -> Permissions {
@@ -16,7 +15,10 @@ fn get_required_bot_perms() -> Permissions {
 }
 
 fn get_deny_perms() -> Permissions {
-    Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES | Permissions::ADD_REACTIONS | Permissions::MANAGE_MESSAGES
+    Permissions::VIEW_CHANNEL
+        | Permissions::SEND_MESSAGES
+        | Permissions::ADD_REACTIONS
+        | Permissions::MANAGE_MESSAGES
 }
 
 /// Start the escape room!
@@ -35,15 +37,17 @@ pub async fn activate(
         if activate {
             match unlock_first_channel(ctx).await {
                 Ok(()) => {
-                    ctx.say("Activating the escape room and all interactions, Good luck!").await?;
+                    ctx.say("Activating the escape room and all interactions, Good luck!")
+                        .await?;
                     ctx.data().set_status(true);
-                },
-                Err(e) => { ctx.say(e.to_string()).await?; }
+                }
+                Err(e) => {
+                    ctx.say(e.to_string()).await?;
+                }
             };
 
             return Ok(());
         }
-
 
         ctx.data().set_status(false);
         ctx.say("Deactivated the escape room!").await?;
@@ -100,23 +104,29 @@ pub async fn setup(
 
         let member_perms = guild.member_permissions(&member);
 
-        (guild.user_permissions_in(&category, &member), member_perms.manage_roles(), empty)
+        (
+            guild.user_permissions_in(&category, &member),
+            member_perms.manage_roles(),
+            empty,
+        )
     };
 
-
     if !has_manage_roles {
-        ctx.say("I don't have manage roles, I need this on my user, not on the category!").await?;
-        return Ok(())
+        ctx.say("I don't have manage roles, I need this on my user, not on the category!")
+            .await?;
+        return Ok(());
     }
 
     let required = get_required_bot_perms();
     let missing_permissions = required & !permissions;
     if missing_permissions.bits() != 0 {
-        ctx.say(format!("I need at least {required} on the category to do this!\n\n I am missing {missing_permissions}"))
-            .await?;
+        ctx.say(format!(
+            "I need at least {required} on the category to do this!\n\n I am missing \
+             {missing_permissions}"
+        ))
+        .await?;
         return Ok(());
     }
-
 
     if !empty_category {
         ctx.say("The category should be empty!").await?;
@@ -240,8 +250,8 @@ async fn setup_channels(
 }
 
 fn get_perm_overwrites(guild_id: GuildId, bot_id: UserId) -> [PermissionOverwrite; 2] {
-    let deny = Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES | Permissions::ADD_REACTIONS | Permissions::MANAGE_MESSAGES;
-    let bot_allow = deny | Permissions::MANAGE_CHANNELS;
+    let deny = get_deny_perms();
+    let bot_allow = get_required_bot_perms();
 
     [
         PermissionOverwrite {

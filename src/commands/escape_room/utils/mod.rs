@@ -7,8 +7,8 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub(super) mod activate;
 pub(super) mod modify;
-pub (super) mod activate;
 
 #[allow(clippy::unused_async)]
 pub(super) async fn autocomplete_question<'a>(

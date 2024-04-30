@@ -1,6 +1,8 @@
 use crate::{data::Data, Error, FrameworkContext};
 use poise::serenity_prelude::{
-    self as serenity, ComponentInteraction, CreateInteractionResponseFollowup, ChannelId, UserId, PermissionOverwrite, Permissions, PermissionOverwriteType
+    self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponse,
+    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, PermissionOverwrite,
+    PermissionOverwriteType, Permissions, UserId,
 };
 
 pub async fn handler(
@@ -25,42 +27,60 @@ async fn handle_component(
     framework: FrameworkContext<'_>,
     press: ComponentInteraction,
 ) -> Result<(), Error> {
-    let matched_question = {
+    // right_question will only have a value when the user is on the wrong question.
+    // the value is the right question.
+    let (question, right_question) = {
         let data = framework.user_data();
-        // will use &str later.
-        let room = data.escape_room.read();
+        let mut room = data.escape_room.write();
+        let expected_question = *room.user_progress.entry(press.user.id).or_insert(1);
 
         // If its not active, don't allow interactions to run.
         if !room.active {
             return Ok(());
         };
 
-        let custom_id = press.data.custom_id.to_string(); // Extract custom_id before closure
+        // will use &str later.
+        let custom_id = press.data.custom_id.to_string();
         let q = room
             .questions
             .iter()
-            .find(|q| q.custom_id == Some(custom_id.clone()))
-            .cloned();
-        q
+            .enumerate()
+            .find(|(_, q)| q.custom_id == Some(custom_id.clone()));
+
+        let Some((index, question)) = q else {
+            return Ok(());
+        };
+
+        let right_question = if index + 1 == expected_question {
+            None
+        } else {
+            Some(expected_question)
+        };
+
+        room.write_questions().unwrap();
+        (question.clone(), right_question)
     };
 
-
-    let Some(question) = matched_question else {
-        return Ok(());
-    };
+    // uh oh.
+    if let Some(right_question) = right_question {
+        wrong_question_response(framework, &press, right_question).await?;
+        // send error.
+        return Err(format!(
+            "<@{}> managed to answer the wrong question, please investigate.",
+            press.user.id
+        )
+        .into());
+    }
 
     // if its not set, it *is* possible to ignore this and continue.
     // But, bigger things could be wrong so lets just ignore.
     let Some(q_channel) = question.channel else {
-        println!("BAD ERROR");
-        // TODO: send a message saying BAD ERROR to event committee.
-        return Ok(())
+        return Err("Somehow a channel wasn't found for a question, this is bad.".into());
     };
 
     // I don't think its possible to do in a different channel but I can see it happening.
     if press.channel_id != q_channel {
-        println!("This shouldn't be possible.");
-        return Ok(())
+        return Ok(());
     }
 
     // open modal, take response, check it against the answers, done.
@@ -73,8 +93,8 @@ async fn handle_component(
         .iter()
         .any(|a| a.eq_ignore_ascii_case(&answer));
 
-        if !matches_answer {
-            press
+    if !matches_answer {
+        press
             .create_followup(
                 &framework.serenity_context.http,
                 CreateInteractionResponseFollowup::new()
@@ -83,28 +103,37 @@ async fn handle_component(
             )
             .await?;
 
-            return Ok(())
-        }
+        return Ok(());
+    }
 
-        // TODO: propagate this upwards.
-        match move_to_next_channel(framework.serenity_context, &framework.user_data(), q_channel, press.user.id).await {
-            Ok(()) => {},
-            Err(e) => {ChannelId::from(1204526474661470308).say(framework.serenity_context, e.to_string()).await?;}
-        };
-
+    move_to_next_channel(
+        framework.serenity_context,
+        &framework.user_data(),
+        q_channel,
+        press.user.id,
+    )
+    .await?;
 
     Ok(())
 }
 
-async fn move_to_next_channel(ctx: &serenity::Context, data: &Data, q_channel: ChannelId, user_id: UserId) -> Result<(), Error> {
-
+async fn move_to_next_channel(
+    ctx: &serenity::Context,
+    data: &Data,
+    q_channel: ChannelId,
+    user_id: UserId,
+) -> Result<(), Error> {
     let mut is_first_question = false;
     let next_question = {
         let room = data.escape_room.read();
         let mut next_question = None;
 
         // Find the index of the question that matches q_channel
-        if let Some(index) = room.questions.iter().position(|q| q.channel == Some(q_channel)) {
+        if let Some(index) = room
+            .questions
+            .iter()
+            .position(|q| q.channel == Some(q_channel))
+        {
             if index == 0 {
                 is_first_question = true;
             }
@@ -119,33 +148,80 @@ async fn move_to_next_channel(ctx: &serenity::Context, data: &Data, q_channel: C
 
     let Some(next_question) = next_question else {
         // won.
-        return Ok(())
+        return Ok(());
     };
 
     let Some(next_channel) = next_question.channel else {
-        // BAD ERROR
-        return Err(format!("Could not find a channel for {next_question:?}").into())
+        return Err(format!("Could not find a channel for {next_question:?}").into());
     };
 
     if is_first_question {
         let target = PermissionOverwrite {
             allow: Permissions::empty(),
             deny: Permissions::VIEW_CHANNEL,
-            kind: PermissionOverwriteType::Member(user_id)
+            kind: PermissionOverwriteType::Member(user_id),
         };
-        q_channel.create_permission(&ctx.http, target, Some("User Finished first question.")).await?;
+        q_channel
+            .create_permission(&ctx.http, target, Some("User Finished first question."))
+            .await?;
     } else {
-        q_channel.delete_permission(&ctx.http, PermissionOverwriteType::Member(user_id), Some("User passed question")).await?;
+        q_channel
+            .delete_permission(
+                &ctx.http,
+                PermissionOverwriteType::Member(user_id),
+                Some("User passed question"),
+            )
+            .await?;
     };
-
 
     let target = PermissionOverwrite {
         allow: Permissions::VIEW_CHANNEL,
         deny: Permissions::empty(),
-        kind: PermissionOverwriteType::Member(user_id)
+        kind: PermissionOverwriteType::Member(user_id),
     };
-    next_channel.create_permission(&ctx.http, target, Some("User goes onto next question")).await?;
+    next_channel
+        .create_permission(&ctx.http, target, Some("User goes onto next question"))
+        .await?;
 
+    data.user_next_question(user_id);
+
+    Ok(())
+}
+
+async fn wrong_question_response(
+    framework: FrameworkContext<'_>,
+    press: &ComponentInteraction,
+    right_question: usize,
+) -> Result<(), Error> {
+    // I could just pass the right questions channel but i didn't think of that so I'm grabbing it here.
+    let right_channel = {
+        let data = framework.user_data();
+        let room = data.escape_room.read();
+        room.questions.get(right_question - 1).map(|q| q.channel)
+    };
+    // could not find question at index
+    let Some(Some(right_channel)) = right_channel else {
+        return Err(format!(
+            "<@{}> stumbled into the wrong question and somehow we couldn't find the right one.",
+            press.user.id
+        )
+        .into());
+    };
+
+    press
+        .create_response(
+            &framework.serenity_context.http,
+            CreateInteractionResponse::Message(
+                CreateInteractionResponseMessage::new()
+                    .ephemeral(true)
+                    .content(format!(
+                        "You are answering the wrong question, you shouldn't be here!, go back to \
+                         <#{right_channel}>\n\n The event committee has already been notified \
+                         incase something went wrong!"
+                    )),
+            ),
+        )
+        .await?;
 
     Ok(())
 }

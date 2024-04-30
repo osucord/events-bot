@@ -1,7 +1,8 @@
 use crate::Error;
 use parking_lot::RwLock;
-use poise::serenity_prelude::{Colour, CreateEmbed, ChannelId, UserId, GuildId};
+use poise::serenity_prelude::{ChannelId, Colour, CreateEmbed, GuildId, UserId};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::Write;
 
 pub struct Data {
@@ -14,6 +15,7 @@ pub struct EscapeRoom {
     pub guild: Option<GuildId>,
     pub winner: Option<UserId>,
     pub questions: Vec<Question>,
+    pub user_progress: HashMap<UserId, usize>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
@@ -72,6 +74,20 @@ impl EscapeRoom {
 }
 
 impl Data {
+    pub fn user_next_question(&self, user_id: UserId) {
+        let mut room = self.escape_room.write();
+        let progress = room.user_progress.entry(user_id).or_insert(1);
+        println!("{progress}");
+        *progress += 1;
+        println!("{progress}");
+        room.write_questions().unwrap();
+    }
+
+    pub fn get_user_question(&self, user_id: UserId) -> usize {
+        let room = self.escape_room.read();
+        *room.user_progress.get(&user_id).unwrap_or(&1)
+    }
+
     pub fn load_questions(&self) -> Result<(), Error> {
         let questions_file = std::fs::read_to_string("escape_room.json");
 
@@ -112,6 +128,7 @@ impl Data {
                 escape_room.guild = config.guild;
                 escape_room.active = config.active;
                 escape_room.questions = config.questions;
+                escape_room.user_progress = config.user_progress;
             }
             Err(_) => {
                 return Err("Cannot read escape room configuration!".into());
