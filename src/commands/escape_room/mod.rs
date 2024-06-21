@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{commands::escape_room::utils::autocomplete_question, Command, Context, Error};
-use poise::serenity_prelude::{self as serenity, CreateActionRow, CreateEmbed};
+use poise::serenity_prelude::{self as serenity, CreateActionRow, CreateEmbed, UserId};
 
 mod modify;
 mod setup;
@@ -171,6 +171,36 @@ pub async fn add_question(ctx: Context<'_>, content: String) -> Result<(), Error
         msg.edit(ctx, poise::CreateReply::new().content("Timeout :<"))
             .await?;
     }
+
+    Ok(())
+}
+
+/// For the rare case of failure, fix manually then run this command.
+#[poise::command(
+    aliases("fixed-err"),
+    rename = "confirm-fixed-err",
+    check = "has_event_committee",
+    prefix_command,
+    slash_command,
+    guild_only
+)]
+pub async fn confirm_fixed_err(ctx: Context<'_>, user_id: UserId) -> Result<(), Error> {
+    let status = ctx.data().overwrite_err_check(user_id);
+
+    if status.is_none() {
+        ctx.say("The user doesn't have an error flag set.").await?;
+        return Ok(());
+    };
+
+    ctx.data().overwrite_err(user_id, None);
+    let q = ctx.data().user_next_question(user_id);
+    ctx.say(format!(
+        "Removing user error, I hope you fixed it right :wink:\n User is now set to question \
+         **{q}**."
+    ))
+    .await?;
+
+    // TODO: make a fix permission thing for less manual intervention?
 
     Ok(())
 }

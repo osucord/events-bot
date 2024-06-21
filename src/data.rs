@@ -16,6 +16,9 @@ pub struct EscapeRoom {
     pub winner: Option<UserId>,
     pub questions: Vec<Question>,
     pub user_progress: HashMap<UserId, usize>,
+    // if errors happened when trying to go into the next question.
+    // contains a bool to say if its hard failed and no longer retrying.
+    pub reprocessing: HashMap<UserId, bool>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
@@ -74,13 +77,31 @@ impl EscapeRoom {
 }
 
 impl Data {
-    pub fn user_next_question(&self, user_id: UserId) {
+    pub fn overwrite_err(&self, user_id: UserId, set_and_retrying: Option<bool>) {
+        let mut room = self.escape_room.write();
+
+        let Some(retrying) = set_and_retrying else {
+            room.reprocessing.remove(&user_id);
+            room.write_questions().unwrap();
+            return;
+        };
+        room.reprocessing.insert(user_id, retrying);
+
+        room.write_questions().unwrap();
+    }
+
+    pub fn overwrite_err_check(&self, user_id: UserId) -> Option<bool> {
+        let room = self.escape_room.read();
+        room.reprocessing.get(&user_id).copied()
+    }
+
+    pub fn user_next_question(&self, user_id: UserId) -> usize {
         let mut room = self.escape_room.write();
         let progress = room.user_progress.entry(user_id).or_insert(1);
-        println!("{progress}");
         *progress += 1;
-        println!("{progress}");
+        let new = *progress;
         room.write_questions().unwrap();
+        new
     }
 
     pub fn get_user_question(&self, user_id: UserId) -> usize {
@@ -129,6 +150,7 @@ impl Data {
                 escape_room.active = config.active;
                 escape_room.questions = config.questions;
                 escape_room.user_progress = config.user_progress;
+                escape_room.reprocessing = config.reprocessing;
             }
             Err(_) => {
                 return Err("Cannot read escape room configuration!".into());
