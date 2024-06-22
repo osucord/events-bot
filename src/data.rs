@@ -24,16 +24,23 @@ pub struct EscapeRoom {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct Question {
     pub content: String,
-    pub answers: Vec<String>,
+    pub parts: Vec<QuestionPart>,
     pub channel: Option<ChannelId>,
     pub custom_id: Option<String>,
 }
 
+/// A part of a question containing its own answers and content.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct QuestionPart {
+    pub content: String,
+    pub answers: Vec<String>,
+}
+
 impl Question {
-    pub fn new(content: String, answers: Vec<String>) -> Self {
+    pub fn new(content: String, parts: Vec<QuestionPart>) -> Self {
         Question {
             content,
-            answers,
+            parts,
             channel: None,
             custom_id: None,
         }
@@ -41,10 +48,25 @@ impl Question {
 
     /// produce an embed with the answers.
     pub fn as_embed(&self) -> CreateEmbed {
+        // different looking response with one part.
+        let description = if self.parts.len() > 1 {
+            self.multi_part()
+        } else {
+            self.solo_part()
+        };
+
+        CreateEmbed::new()
+            .title("Question Answers")
+            .description(description)
+            .colour(Colour::BLUE)
+    }
+
+    fn solo_part(&self) -> String {
         let def_str = "**Answers:**\n";
         let def = String::from(def_str);
 
-        let answers_str = self
+        let part = self.parts.first().unwrap();
+        let answers_str = part
             .answers
             .iter()
             .enumerate()
@@ -52,17 +74,35 @@ impl Question {
                 writeln!(acc, "{i}. {a}").unwrap();
                 acc
             });
-
-        let answers_str = if answers_str == def_str {
+        if answers_str == def_str {
             String::from("There are no answers!")
         } else {
             answers_str
-        };
+        }
+    }
 
-        CreateEmbed::new()
-            .title(&self.content)
-            .description(answers_str)
-            .colour(Colour::BLUE)
+    fn multi_part(&self) -> String {
+        // - Question
+        //  - Answer
+        //  - Answer
+
+        let def_str = "**Parts:**\n";
+        let def = String::from(def_str);
+
+        let answers_str = self.parts.iter().fold(def, |mut acc, p| {
+            writeln!(acc, "- {}", p.content).unwrap();
+            p.answers.iter().fold(acc, |mut acc, a| {
+                writeln!(acc, " - {a}").unwrap();
+                acc
+            })
+        });
+
+        // shouldn't trigger anyway.
+        if answers_str == def_str {
+            String::from("There are no parts!")
+        } else {
+            answers_str
+        }
     }
 }
 

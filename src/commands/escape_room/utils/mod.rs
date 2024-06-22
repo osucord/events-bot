@@ -1,3 +1,4 @@
+use crate::data::QuestionPart;
 use crate::{data::Question, Context, Data, Error};
 use ::serenity::futures::{self, Stream, StreamExt};
 use poise::serenity_prelude::{self as serenity, ComponentInteraction};
@@ -35,6 +36,7 @@ pub(super) fn check_duplicate_question(data: &Arc<Data>, content: &str) -> bool 
         .questions
         .iter()
         .any(|q| q.content == content)
+
 }
 
 pub(super) async fn handle_add(
@@ -67,6 +69,31 @@ pub(super) async fn handle_add(
     }
 }
 
+
+pub(super) async fn handle_content(
+    ctx: Context<'_>,
+    press: ComponentInteraction,
+) -> Result<String, Error> {
+    let respon = poise::execute_modal_on_component_interaction::<Content>(
+        ctx.serenity_context(),
+        press,
+        None,
+        Some(Duration::from_secs(30)),
+    )
+    .await;
+
+    match respon {
+        Ok(answer) => {
+            let Some(answer) = answer else {
+                return Err("Empty response".into());
+            };
+
+            Ok(answer.answer)
+        }
+        Err(e) => Err(Box::new(e)),
+    }
+}
+
 pub(super) async fn handle_delete(
     ctx: Context<'_>,
     press: ComponentInteraction,
@@ -86,7 +113,7 @@ pub(super) async fn handle_delete(
             };
 
             // return a value that can be used directly later.
-            Ok(answer.index.parse::<usize>()? - 1)
+            Ok(answer.index.parse::<usize>()?.saturating_sub(1))
         }
         Err(e) => Err(Box::new(e)),
     }
@@ -99,7 +126,10 @@ pub(super) async fn update_message(
     answers: &[String],
 ) -> Result<(), Error> {
     // Maybe I should just pass around a Question to begin with lol.
-    let question = Question::new(content.to_owned(), answers.to_owned());
+    let question = Question::new(content.to_owned(), vec![QuestionPart {
+        content: String::new(),
+        answers: answers.to_owned(),
+    }]);
     let embed = question.as_embed();
 
     msg.edit(ctx, poise::CreateReply::new().embed(embed))
@@ -118,9 +148,14 @@ pub(super) async fn handle_confirm(
         let data = ctx.data();
         let mut escape_room = data.escape_room.write();
 
+        let question = Question::new(content.clone(), vec![QuestionPart {
+            content: String::new(),
+            answers: answers.clone(),
+        }]);
+
         escape_room
             .questions
-            .push(Question::new(content.clone(), answers.clone()));
+            .push(question);
 
         escape_room.write_questions().unwrap();
     }
@@ -171,4 +206,10 @@ struct Answers {
 #[name = "Remove an answer"]
 struct Remove {
     index: String,
+}
+
+#[derive(Debug, poise::Modal)]
+#[name = "Set the short description (must be 45 or fewer characters or truncation will occur."]
+struct Content {
+    answer: String,
 }

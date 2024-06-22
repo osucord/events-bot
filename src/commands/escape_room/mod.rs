@@ -127,7 +127,7 @@ pub async fn add_question(ctx: Context<'_>, content: String) -> Result<(), Error
     // The embed.
     let embed = CreateEmbed::new().description(def_description);
     // The message builder.
-    let builder = poise::CreateReply::default()
+    let builder = poise::CreateReply::default().content("Mutating base part (to add additional parts or extra context to the modal, run `modify-question`.")
         .embed(embed)
         .components(components);
 

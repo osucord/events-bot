@@ -1,9 +1,10 @@
-use crate::{Error, FrameworkContext};
+use crate::{data::Question, Error, FrameworkContext};
 use poise::serenity_prelude::{
     self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponse,
-    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, PermissionOverwrite,
-    PermissionOverwriteType, Permissions, UserId,
+    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateQuickModal,
+    PermissionOverwrite, PermissionOverwriteType, Permissions, UserId,
 };
+use small_fixed_array::FixedString;
 
 pub async fn handler(
     event: &serenity::FullEvent,
@@ -83,23 +84,29 @@ async fn handle_component(
         return Ok(());
     }
 
+
     // open modal, take response, check it against the answers, done.
-    let answer = get_answer(framework.serenity_context, press.clone()).await;
+    let answers = get_answer(framework.serenity_context, press.clone(), question.clone()).await;
 
-    let Ok(answer) = answer else { return Ok(()) };
+    let Ok(answers) = answers else { return Ok(()) };
 
-    let matches_answer = question
-        .answers
-        .iter()
-        .any(|a| a.eq_ignore_ascii_case(&answer));
+    let matches_answers = answers.iter().enumerate().all(|(i, a)| {
+        question
+            .parts
+            .get(i)
+            .unwrap()
+            .answers
+            .iter()
+            .any(|ans| ans.eq_ignore_ascii_case(a))
+    });
 
-    if !matches_answer {
+    if !matches_answers {
         press
             .create_followup(
                 &framework.serenity_context.http,
                 CreateInteractionResponseFollowup::new()
                     .ephemeral(true)
-                    .content(format!("{answer} was not a right answer!")),
+                    .content("That was not the right answer!"),
             )
             .await?;
 
@@ -236,7 +243,6 @@ async fn handle_overwrite(
         (q_channel, None)
     };
 
-    // TODO: make configurable.
     let event_committee = ChannelId::new(1187133979871166484);
 
     match handle_permission_operation(
@@ -355,24 +361,27 @@ async fn wrong_question_response(
     Ok(())
 }
 
-async fn get_answer(ctx: &serenity::Context, press: ComponentInteraction) -> Result<String, Error> {
-    let respon = poise::execute_modal_on_component_interaction::<Answer>(
-        ctx,
-        press,
-        None,
-        Some(std::time::Duration::from_secs(60)),
-    )
-    .await;
-    match respon {
-        Ok(answer) => {
-            let Some(answer) = answer else {
-                return Err("Empty response".into());
-            };
+async fn get_answer(
+    ctx: &serenity::Context,
+    press: ComponentInteraction,
+    question: Question,
+) -> Result<Vec<FixedString<u16>>, Error> {
+    let mut modal = CreateQuickModal::new("Question").timeout(std::time::Duration::from_secs(60));
 
-            Ok(answer.answer)
-        }
-        Err(e) => Err(Box::new(e)),
+    for part in question.parts {
+        modal = modal.short_field(part.content);
     }
+
+    let response = press.quick_modal(ctx, modal).await?;
+
+    let Some(response) = response else {
+        return Err("Empty response".into());
+    };
+
+    // close modal.
+    response.interaction.create_response(&ctx.http, CreateInteractionResponse::Acknowledge).await?;
+
+    Ok(response.inputs.into_iter().collect::<Vec<_>>())
 }
 
 #[derive(Debug, poise::Modal)]

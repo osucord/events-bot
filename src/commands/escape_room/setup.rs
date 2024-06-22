@@ -51,7 +51,6 @@ pub async fn activate(
 
         ctx.data().set_status(false);
         ctx.say("Deactivated the escape room!").await?;
-        // TODO: lock escape room, but that would require tracking user progress.
         return Ok(());
     };
 
@@ -165,7 +164,10 @@ fn check_setup(data: &Arc<Data>) -> (bool, bool) {
         .iter()
         .any(|q| q.channel.is_some() || q.custom_id.is_some());
 
-    let unanswerable = room.questions.iter().any(|q| q.answers.is_empty());
+    let unanswerable = room
+        .questions
+        .iter()
+        .any(|q| q.parts.is_empty() || q.parts.iter().any(|p| p.answers.is_empty()));
 
     (setup, unanswerable)
 }
