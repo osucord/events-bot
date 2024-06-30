@@ -14,6 +14,7 @@ pub struct EscapeRoom {
     pub active: bool,
     pub guild: Option<GuildId>,
     pub winner: Option<UserId>,
+    pub winner_channel:Option<ChannelId>,
     pub questions: Vec<Question>,
     pub user_progress: HashMap<UserId, usize>,
     // if errors happened when trying to go into the next question.

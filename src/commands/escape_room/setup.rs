@@ -14,6 +14,7 @@ fn get_required_bot_perms() -> Permissions {
     get_deny_perms() | Permissions::MANAGE_CHANNELS
 }
 
+/// These permissions are to be removed from users, but the bot needs them to do that.
 fn get_deny_perms() -> Permissions {
     Permissions::VIEW_CHANNEL
         | Permissions::SEND_MESSAGES
@@ -238,11 +239,20 @@ async fn setup_channels(
         pos -= 1;
     }
 
+    // create winners room.
+    let builder = serenity::CreateChannel::new("PLACEHOLDER NAME")
+    .permissions(&perms)
+    .category(category_id)
+    .position(pos);
+
+    let channel = guild_id.create_channel(ctx, builder).await?;
+
     {
         let data = ctx.data();
         let mut room = data.escape_room.write();
         room.guild = ctx.guild_id();
         room.questions = questions;
+        room.winner_channel = Some(channel.id);
         room.write_questions().unwrap();
     }
 
