@@ -15,8 +15,9 @@ pub async fn handler(
             println!("Logged in as {}", data_about_bot.user.tag());
         }
         serenity::FullEvent::InteractionCreate { interaction } => {
-            if let Some(press) = interaction.clone().message_component() {
-                handle_component(framework, press).await?;
+            match interaction {
+                serenity::Interaction::Component(press) => handle_component(framework, press).await?,
+                _ => return Ok(()),
             }
         }
         _ => {}
@@ -26,7 +27,7 @@ pub async fn handler(
 
 async fn handle_component(
     framework: FrameworkContext<'_>,
-    press: ComponentInteraction,
+    press: &ComponentInteraction,
 ) -> Result<(), Error> {
     // right_question will only have a value when the user is on the wrong question.
     // the value is the right question.
@@ -40,18 +41,20 @@ async fn handle_component(
             return Ok(());
         };
 
-        // will use &str later.
-        let custom_id = press.data.custom_id.to_string();
+        let custom_id = press.data.custom_id.as_str();
         let q = room
             .questions
             .iter()
             .enumerate()
-            .find(|(_, q)| q.custom_id == Some(custom_id.clone()));
+            .find(|(_, q)| q.custom_id.as_ref().is_some_and(|id| *id == custom_id));
+
 
         let Some((index, question)) = q else {
             return Ok(());
         };
 
+        // If the user is on the wrong question they either have administrator
+        // or have a permission override they shouldn't have, or something else has gone wrong.
         let right_question = if index + 1 == expected_question {
             None
         } else {
@@ -64,7 +67,7 @@ async fn handle_component(
 
     // uh oh.
     if let Some(right_question) = right_question {
-        wrong_question_response(framework, &press, right_question).await?;
+        wrong_question_response(framework, press, right_question).await?;
         // send error.
         return Err(format!(
             "<@{}> managed to answer the wrong question, please investigate.",

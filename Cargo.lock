@@ -372,6 +372,7 @@ dependencies = [
  "serde_json",
  "serenity",
  "small-fixed-array",
+ "to-arraystring 0.2.0",
  "tokio",
  "tokio-util",
 ]
@@ -1294,7 +1295,7 @@ dependencies = [
  "small-fixed-array",
  "strum",
  "time",
- "to-arraystring",
+ "to-arraystring 0.1.1",
  "tokio",
  "tokio-tungstenite",
  "tracing",
@@ -1529,6 +1530,17 @@ name = "to-arraystring"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebb6a403b7fb46904d796b3b2acfa31885440adc51925e6fc19ac28cf4afa661"
+dependencies = [
+ "arrayvec",
+ "itoa",
+ "ryu",
+]
+
+[[package]]
+name = "to-arraystring"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65f0cb560353f425f2258dd9a5159441ac9c47ef7f87e5ab6836a7b1f04ef71d"
 dependencies = [
  "arrayvec",
  "itoa",
