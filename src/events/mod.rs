@@ -8,7 +8,7 @@ use poise::serenity_prelude::{
 mod move_channel;
 
 
-use small_fixed_array::FixedString;
+use small_fixed_array::{FixedArray, FixedString};
 use aformat::aformat;
 
 pub async fn handler(
@@ -168,7 +168,7 @@ async fn get_answer(
     ctx: &serenity::Context,
     press: ComponentInteraction,
     question: Question,
-) -> Result<Vec<FixedString<u16>>, Error> {
+) -> Result<FixedArray<FixedString<u16>>, Error> {
     let mut modal = CreateQuickModal::new("Question").timeout(std::time::Duration::from_secs(60));
 
     for part in question.parts {
@@ -184,7 +184,7 @@ async fn get_answer(
     // close modal.
     response.interaction.create_response(&ctx.http, CreateInteractionResponse::Acknowledge).await?;
 
-    Ok(response.inputs.into_iter().collect::<Vec<_>>())
+    Ok(response.inputs)
 }
 
 #[derive(Debug, poise::Modal)]
