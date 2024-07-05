@@ -65,10 +65,11 @@ async fn win(framework: FrameworkContext<'_>, user_id: UserId, is_first_question
     let data = framework.user_data();
     let (channel_id, first) = {
         let mut room = data.escape_room.write();
-        if room.winner.is_none() {
-            room.winner = Some(user_id);
-        }
-        (room.winner_channel, room.winner.is_some())
+
+        let first = room.winner.is_none();
+        room.winner.get_or_insert(user_id);
+
+        (room.winner_channel, first)
     };
 
     // this is here to prevent deadlocks.
