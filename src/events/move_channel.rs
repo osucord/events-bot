@@ -1,6 +1,8 @@
-use poise::serenity_prelude::{self as serenity, UserId, PermissionOverwrite, ChannelId, PermissionOverwriteType, Permissions};
+use poise::serenity_prelude::{
+    self as serenity, ChannelId, PermissionOverwrite, PermissionOverwriteType, Permissions, UserId,
+};
 
-use crate::{FrameworkContext, Error};
+use crate::{Error, FrameworkContext};
 
 use std::time::Duration;
 use tokio::time::sleep;
@@ -55,12 +57,15 @@ pub async fn move_to_next_channel(
     Ok(())
 }
 
-
 /// A function for winning that I would honestly like all in one function but the code sucks
 /// elsewhere.
 ///
 /// TODO: merge with the other function.
-async fn win(framework: FrameworkContext<'_>, user_id: UserId, is_first_question: bool) -> Result<(), Error> {
+async fn win(
+    framework: FrameworkContext<'_>,
+    user_id: UserId,
+    is_first_question: bool,
+) -> Result<(), Error> {
     // get room.
     let data = framework.user_data();
     let (channel_id, first) = {
@@ -86,31 +91,44 @@ async fn win(framework: FrameworkContext<'_>, user_id: UserId, is_first_question
 
     let reason = "User wins escape room.";
 
-
     let result = if is_first_question {
         let overwrite = PermissionOverwrite {
             allow: Permissions::empty(),
             deny: Permissions::VIEW_CHANNEL,
             kind: PermissionOverwriteType::Member(user_id),
         };
-        channel_id.create_permission(http, overwrite, Some(reason)).await
+        channel_id
+            .create_permission(http, overwrite, Some(reason))
+            .await
     } else {
-        channel_id.delete_permission(http, PermissionOverwriteType::Member(user_id), Some(reason)).await
+        channel_id
+            .delete_permission(http, PermissionOverwriteType::Member(user_id), Some(reason))
+            .await
     };
 
     let event_committee = ChannelId::new(1187133979871166484);
     if result.is_err() {
-        event_committee.say(http, format!("<@{user_id}> won, but I couldn't move them to the winners channel!")).await?;
-        return Ok(())
+        event_committee
+            .say(
+                http,
+                format!("<@{user_id}> won, but I couldn't move them to the winners channel!"),
+            )
+            .await?;
+        return Ok(());
     }
-
 
     if first {
-        channel_id.say(http, format!("<@{user_id}> was the first to win the escape room! Congratulations!")).await?;
+        channel_id
+            .say(
+                http,
+                format!("<@{user_id}> was the first to win the escape room! Congratulations!"),
+            )
+            .await?;
     } else {
-        channel_id.say(http, format!("Congratulations! <@{user_id}>")).await?;
+        channel_id
+            .say(http, format!("Congratulations! <@{user_id}>"))
+            .await?;
     }
-
 
     Ok(())
 }
@@ -187,8 +205,6 @@ async fn handle_overwrite(
         (q_channel, None)
     };
 
-    let event_committee = ChannelId::new(1187133979871166484);
-
     match handle_permission_operation(
         framework,
         user_id,
@@ -201,6 +217,10 @@ async fn handle_overwrite(
     {
         Ok(()) => {}
         Err(e) => {
+            let Some(event_committee) = framework.user_data().escape_room.read().error_channel
+            else {
+                return Ok(());
+            };
             let embed = serenity::CreateEmbed::new()
                 .title("Failure removing permissions to view question")
                 .description(e.to_string())
@@ -241,6 +261,10 @@ async fn handle_overwrite(
     {
         Ok(()) => {}
         Err(e) => {
+            let Some(event_committee) = framework.user_data().escape_room.read().error_channel
+            else {
+                return Ok(());
+            };
             let embed = serenity::CreateEmbed::new()
                 .title("Failure adding permissions to the next question")
                 .description(e.to_string())

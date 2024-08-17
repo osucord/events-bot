@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::commands::checks::{get_member, not_active};
 use crate::commands::escape_room::utils::activate::unlock_first_channel;
 use crate::{Context, Data, Error};
+use ::serenity::all::{CreateAttachment, CreateMessage};
 use poise::serenity_prelude::{
     self as serenity, ChannelId, ChannelType, Colour, CreateActionRow, CreateEmbed, GuildChannel,
     GuildId, PermissionOverwrite, PermissionOverwriteType, Permissions, UserId,
@@ -224,26 +225,51 @@ async fn setup_channels(
         )
         .label("Submit Answer")])];
 
-        let embed = CreateEmbed::new()
+        let mut embed = CreateEmbed::new()
             .title(format!("Question #{index}"))
             .description(&question.content)
             .colour(Colour::BLUE);
 
-        let builder = serenity::CreateMessage::new()
-            .embed(embed)
-            .components(components);
+        if let Some(url) = &question.thumbnail_path {
+            // shouldn't really unwrap here but w/e, needs an entire rewrite anyway.
+            let name = url.strip_prefix("files/").unwrap();
+            embed = embed.thumbnail(format!("attachment://{name}"));
+        }
+
+        let mut builder = CreateMessage::new().embed(embed).components(components);
+
+        if let Some(url) = &question.thumbnail_path {
+            let attachment = CreateAttachment::path(url).await;
+            if let Ok(attachment) = attachment {
+                builder = builder.add_file(attachment);
+            } else {
+                println!("Could not set thumbnail for question {index}");
+            }
+        }
 
         channel.send_message(ctx, builder).await?;
+
+        // This is its own message to avoid the embed being below the attachment.
+        if let Some(url) = &question.attachment_path {
+            let attachment = CreateAttachment::path(url).await;
+            if let Ok(attachment) = attachment {
+                channel
+                    .send_message(ctx, CreateMessage::new().add_file(attachment))
+                    .await?;
+            } else {
+                println!("Could not set attachment for question {index}");
+            }
+        }
 
         index += 1;
         pos -= 1;
     }
 
     // create winners room.
-    let builder = serenity::CreateChannel::new("PLACEHOLDER NAME")
-    .permissions(&perms)
-    .category(category_id)
-    .position(pos);
+    let builder = serenity::CreateChannel::new("name-me")
+        .permissions(&perms)
+        .category(category_id)
+        .position(pos);
 
     let channel = guild_id.create_channel(ctx, builder).await?;
 

@@ -4,6 +4,7 @@ use poise::serenity_prelude::{ChannelId, Colour, CreateEmbed, GuildId, UserId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::path::Path;
 
 pub struct Data {
     pub escape_room: RwLock<EscapeRoom>,
@@ -14,7 +15,8 @@ pub struct EscapeRoom {
     pub active: bool,
     pub guild: Option<GuildId>,
     pub winner: Option<UserId>,
-    pub winner_channel:Option<ChannelId>,
+    pub winner_channel: Option<ChannelId>,
+    pub error_channel: Option<ChannelId>,
     pub questions: Vec<Question>,
     pub user_progress: HashMap<UserId, usize>,
     // if errors happened when trying to go into the next question.
@@ -25,6 +27,8 @@ pub struct EscapeRoom {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct Question {
     pub content: String,
+    pub thumbnail_path: Option<String>,
+    pub attachment_path: Option<String>,
     pub parts: Vec<QuestionPart>,
     pub channel: Option<ChannelId>,
     pub custom_id: Option<String>,
@@ -41,10 +45,42 @@ impl Question {
     pub fn new(content: String, parts: Vec<QuestionPart>) -> Self {
         Question {
             content,
+            thumbnail_path: None,
+            attachment_path: None,
             parts,
             channel: None,
             custom_id: None,
         }
+    }
+
+    /// Sets the thumbnail path to the specified string.
+    /// Will automatically specify `files/`.
+    fn _set_thumbnail_path(mut self, url: &str) -> Result<Self, ()> {
+        // not perfect but will do, always can redesign later.
+        let path_str = format!("files/{url}");
+        let path = Path::new(&path_str);
+        if path.exists() {
+            self.thumbnail_path = Some(path_str);
+        } else {
+            return Err(());
+        };
+
+        Ok(self)
+    }
+
+    /// Sets the thumbnail path to the specified string.
+    /// Will automatically specify `files/`.
+    fn _set_attachment_path(mut self, url: &str) -> Result<Self, ()> {
+        // not perfect but will do, always can redesign later.
+        let path_str = format!("files/{url}");
+        let path = Path::new(&path_str);
+        if path.exists() {
+            self.attachment_path = Some(path_str);
+        } else {
+            return Err(());
+        };
+
+        Ok(self)
     }
 
     /// produce an embed with the answers.
@@ -192,6 +228,7 @@ impl Data {
                 escape_room.questions = config.questions;
                 escape_room.user_progress = config.user_progress;
                 escape_room.reprocessing = config.reprocessing;
+                escape_room.error_channel = config.error_channel;
             }
             Err(_) => {
                 return Err("Cannot read escape room configuration!".into());
