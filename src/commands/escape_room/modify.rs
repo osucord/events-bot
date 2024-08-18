@@ -1,8 +1,5 @@
 use crate::{
-    commands::escape_room::utils::{
-        autocomplete_question,
-        modify::update_question_content,
-    },
+    commands::escape_room::utils::{autocomplete_question, modify::update_question_content},
     data::{Question, QuestionPart},
 };
 use crate::{Context, Error};
@@ -142,7 +139,8 @@ async fn answers_inner(
     if existed {
         ctx.say("Successfully updated question!").await?;
     } else {
-        ctx.say("Old question could not be found, so new was inserted instead!").await?;
+        ctx.say("Old question could not be found, so new was inserted instead!")
+            .await?;
     }
 
     Ok(())
@@ -299,7 +297,7 @@ async fn add_part_update(
     ctx: Context<'_>,
     handle: &ReplyHandle<'_>,
     state: &QuestionPart,
-    remove_components: bool
+    remove_components: bool,
 ) -> Result<(), Error> {
     let embed = add_part_embed(state);
 
@@ -309,9 +307,7 @@ async fn add_part_update(
         builder = builder.components(vec![]);
     }
 
-    handle
-        .edit(ctx, builder)
-        .await?;
+    handle.edit(ctx, builder).await?;
 
     Ok(())
 }
@@ -321,7 +317,10 @@ fn add_part_embed(state: &QuestionPart) -> CreateEmbed<'_> {
         "No answers at this time!".to_string()
     } else {
         let mut string = String::new();
-        state.answers.iter().for_each(|a| writeln!(string, "{a}").unwrap());
+        state
+            .answers
+            .iter()
+            .for_each(|a| writeln!(string, "{a}").unwrap());
         string
     };
 
@@ -331,7 +330,5 @@ fn add_part_embed(state: &QuestionPart) -> CreateEmbed<'_> {
         &state.content
     };
 
-    CreateEmbed::new()
-        .title(title)
-        .description(description)
+    CreateEmbed::new().title(title).description(description)
 }

@@ -1,15 +1,18 @@
 use crate::{data::Question, Error, FrameworkContext};
 use move_channel::move_to_next_channel;
 use poise::serenity_prelude::{
-    self as serenity, ComponentInteraction, CreateInteractionResponse,
-    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateQuickModal,
+    self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponse,
+    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateQuickModal, User,
+    UserId,
 };
+
+use std::fmt::Write;
 
 mod move_channel;
 
-
-use small_fixed_array::{FixedArray, FixedString};
 use aformat::aformat;
+use small_fixed_array::{FixedArray, FixedString};
+use tokio::{fs::OpenOptions, io::AsyncWriteExt};
 
 pub async fn handler(
     event: &serenity::FullEvent,
@@ -19,24 +22,23 @@ pub async fn handler(
         serenity::FullEvent::Ready { data_about_bot, .. } => {
             println!("Logged in as {}", data_about_bot.user.tag());
         }
-        serenity::FullEvent::InteractionCreate { interaction } => {
-            match interaction {
-                serenity::Interaction::Component(press) => handle_component(framework, press).await?,
-                _ => return Ok(()),
-            }
-        }
+        serenity::FullEvent::InteractionCreate { interaction } => match interaction {
+            serenity::Interaction::Component(press) => handle_component(framework, press).await?,
+            _ => return Ok(()),
+        },
         _ => {}
     }
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)] // entire thing needs a rewrite anyway.
 async fn handle_component(
     framework: FrameworkContext<'_>,
     press: &ComponentInteraction,
 ) -> Result<(), Error> {
     // right_question will only have a value when the user is on the wrong question.
     // the value is the right question.
-    let (question, right_question) = {
+    let (question, next_channel, log_channel, right_question, index) = {
         let data = framework.user_data();
         let mut room = data.escape_room.write();
         let expected_question = *room.user_progress.entry(press.user.id).or_insert(1);
@@ -53,11 +55,12 @@ async fn handle_component(
             .enumerate()
             .find(|(_, q)| q.custom_id.as_ref().is_some_and(|id| *id == custom_id));
 
-
         let Some((index, question)) = q else {
             return Ok(());
         };
 
+        let next_channel = room.questions.get(index + 1).and_then(|q| q.channel);
+        let log_channel = room.analytics_channel;
         // If the user is on the wrong question they either have Administrator or have a permission
         // override they shouldn't have, or something else has gone wrong.
         let right_question = if index + 1 == expected_question {
@@ -67,7 +70,14 @@ async fn handle_component(
         };
 
         room.write_questions().unwrap();
-        (question.clone(), right_question)
+
+        (
+            question.clone(),
+            next_channel,
+            log_channel,
+            right_question,
+            index,
+        )
     };
 
     // uh oh.
@@ -76,7 +86,8 @@ async fn handle_component(
         return Err(aformat!(
             "<@{}> managed to answer the wrong question, please investigate.",
             press.user.id.get()
-        ).as_str()
+        )
+        .as_str()
         .into());
     }
 
@@ -90,7 +101,6 @@ async fn handle_component(
     if press.channel_id != q_channel {
         return Ok(());
     }
-
 
     // open modal, take response, check it against the answers, done.
     let answers = get_answer(framework.serenity_context, press.clone(), question.clone()).await;
@@ -117,14 +127,47 @@ async fn handle_component(
             )
             .await?;
 
+        log(
+            framework.serenity_context,
+            press.user.clone(),
+            answers,
+            index + 1,
+            log_channel,
+            false,
+        )
+        .await;
+
         return Ok(());
     }
+
+    // get next channel_id.
+    if let Some(next_channel) = next_channel {
+        let _ = press
+            .create_followup(
+                &framework.serenity_context.http,
+                CreateInteractionResponseFollowup::new()
+                    .ephemeral(true)
+                    .content(format!(
+                        "That was the correct answer, please proceed to <#{next_channel}>!"
+                    )),
+            )
+            .await;
+    }
+
+    log(
+        framework.serenity_context,
+        press.user.clone(),
+        answers,
+        index + 1,
+        log_channel,
+        true,
+    )
+    .await;
 
     move_to_next_channel(framework, q_channel, press.user.id).await?;
 
     Ok(())
 }
-
 
 async fn wrong_question_response(
     framework: FrameworkContext<'_>,
@@ -182,9 +225,93 @@ async fn get_answer(
     };
 
     // close modal.
-    response.interaction.create_response(&ctx.http, CreateInteractionResponse::Acknowledge).await?;
+    response
+        .interaction
+        .create_response(&ctx.http, CreateInteractionResponse::Acknowledge)
+        .await?;
 
     Ok(response.inputs)
+}
+
+#[derive(serde::Serialize)]
+struct QuestionLogMessage {
+    user: UserId,
+    answers: FixedArray<FixedString<u16>>,
+    q_num: String,
+    correct: bool,
+}
+
+impl QuestionLogMessage {
+    fn to_embed(&self, user: &User) -> serenity::CreateEmbed<'_> {
+        let (title, colour) = if self.correct {
+            (
+                format!("Question {} answered correctly", self.q_num),
+                serenity::Colour::DARK_GREEN,
+            )
+        } else {
+            (
+                format!("Question {} answered incorrectly", self.q_num),
+                serenity::Colour::RED,
+            )
+        };
+
+        let author = serenity::CreateEmbedAuthor::new(user.name.clone()).icon_url(user.face());
+
+        let mut answer_str = String::new();
+        for answer in &self.answers {
+            write!(answer_str, "Answer: {answer}").unwrap();
+        }
+
+        serenity::CreateEmbed::new()
+            .title(title)
+            .colour(colour)
+            .author(author)
+            .description(answer_str)
+    }
+}
+
+async fn log(
+    ctx: &serenity::Context,
+    user: User,
+    answers: FixedArray<FixedString<u16>>,
+    q_num: usize,
+    log_channel: Option<ChannelId>,
+    correct: bool,
+) {
+    let msg = QuestionLogMessage {
+        user: user.id,
+        answers,
+        q_num: q_num.to_string(),
+        correct,
+    };
+
+    let log_msg = serde_json::to_string(&msg).unwrap();
+
+    if let Some(channel) = log_channel {
+        let _ = tokio::join!(
+            create_or_push_line(&log_msg),
+            channel.send_message(
+                ctx,
+                serenity::CreateMessage::new().embed(msg.to_embed(&user))
+            )
+        );
+    } else {
+        let _ = create_or_push_line(&log_msg).await;
+    }
+}
+
+async fn create_or_push_line(line: &str) -> Result<(), Error> {
+    let file_path = "answers_log.jsonl";
+
+    let mut file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(file_path)
+        .await?;
+
+    file.write_all(line.as_bytes()).await?;
+    file.write_all(b"\n").await?;
+    Ok(())
 }
 
 #[derive(Debug, poise::Modal)]

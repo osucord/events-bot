@@ -1,7 +1,6 @@
 use crate::{data::Question, Data, Error};
 use std::sync::Arc;
 
-
 pub fn update_question_content(
     data: &Arc<Data>,
     query: &str,
