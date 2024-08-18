@@ -211,7 +211,13 @@ async fn wrong_question_response(
             serenity::CreateEmbedAuthor::new(press.user.name.clone()).icon_url(press.user.face());
         let footer = serenity::CreateEmbedFooter::new(format!("UserId: {}", press.user.id));
         // TODO: rejoin perm fix.
-        let description = format!("Somebody answered the wrong question either because I fucked up/they clicked the modal AGAIN before I moved them, Discord fucked up or they have Administrator.\nThey answered <#{}> when they are supposed to answer <#{}>\n\nTODO: restore perms on rejoin and possible check for stupid Administrators", press.channel_id, right_channel);
+        let description = format!(
+            "Somebody answered the wrong question either because I fucked up/they clicked the \
+             modal AGAIN before I moved them, Discord fucked up or they have Administrator.\nThey \
+             answered <#{}> when they are supposed to answer <#{}>\n\nTODO: restore perms on \
+             rejoin and possible check for stupid Administrators",
+            press.channel_id, right_channel
+        );
         let embed = serenity::CreateEmbed::new()
             .author(author)
             .footer(footer)
