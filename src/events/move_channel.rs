@@ -37,7 +37,7 @@ pub async fn move_to_next_channel(
     };
 
     let Some(next_question) = next_question else {
-        win(framework, user_id, is_first_question).await?;
+        win(framework, user_id, q_channel, is_first_question).await?;
         return Ok(());
     };
 
@@ -64,6 +64,7 @@ pub async fn move_to_next_channel(
 async fn win(
     framework: FrameworkContext<'_>,
     user_id: UserId,
+    current_channel: ChannelId,
     is_first_question: bool,
 ) -> Result<(), Error> {
     // get room.
@@ -97,17 +98,34 @@ async fn win(
             deny: Permissions::VIEW_CHANNEL,
             kind: PermissionOverwriteType::Member(user_id),
         };
-        channel_id
+        current_channel
             .create_permission(http, overwrite, Some(reason))
             .await
     } else {
-        channel_id
+        current_channel
             .delete_permission(http, PermissionOverwriteType::Member(user_id), Some(reason))
             .await
     };
 
-    let event_committee = ChannelId::new(1187133979871166484);
-    if result.is_err() {
+    let result2 = {
+        let overwrite = PermissionOverwrite {
+            allow: Permissions::VIEW_CHANNEL
+                | Permissions::SEND_MESSAGES
+                | Permissions::ADD_REACTIONS,
+            deny: Permissions::empty(),
+            kind: PermissionOverwriteType::Member(user_id),
+        };
+        channel_id
+            .create_permission(http, overwrite, Some(reason))
+            .await
+    };
+
+    if result.is_err() || result2.is_err() {
+        let event_committee = { framework.user_data().escape_room.read().error_channel };
+        let Some(event_committee) = event_committee else {
+            return Ok(());
+        };
+
         event_committee
             .say(
                 http,

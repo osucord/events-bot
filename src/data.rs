@@ -231,6 +231,7 @@ impl Data {
                 escape_room.reprocessing = config.reprocessing;
                 escape_room.error_channel = config.error_channel;
                 escape_room.analytics_channel = config.analytics_channel;
+                escape_room.winner_channel = config.winner_channel;
             }
             Err(_) => {
                 return Err("Cannot read escape room configuration!".into());
