@@ -204,6 +204,30 @@ async fn wrong_question_response(
         )
         .await?;
 
+    let channel = { framework.user_data().escape_room.read().error_channel };
+
+    if let Some(channel) = channel {
+        let author =
+            serenity::CreateEmbedAuthor::new(press.user.name.clone()).icon_url(press.user.face());
+        let footer = serenity::CreateEmbedFooter::new(format!("UserId: {}", press.user.id));
+        // TODO: rejoin perm fix.
+        let description = format!("Somebody answered the wrong question either because I fucked up/they clicked the modal AGAIN before I moved them, Discord fucked up or they have Administrator.\nThey answered <#{}> when they are supposed to answer <#{}>\n\nTODO: restore perms on rejoin and possible check for stupid Administrators", press.channel_id, right_channel);
+        let embed = serenity::CreateEmbed::new()
+            .author(author)
+            .footer(footer)
+            .description(description);
+
+        channel
+            .send_message(
+                &framework.serenity_context.http,
+                serenity::CreateMessage::new()
+                    // Lilith and Ruben
+                    .content("<@158567567487795200> <@291089948709486593>")
+                    .embed(embed),
+            )
+            .await?;
+    }
+
     Ok(())
 }
 
@@ -259,7 +283,7 @@ impl QuestionLogMessage {
 
         let mut answer_str = String::new();
         for answer in &self.answers {
-            write!(answer_str, "Answer: {answer}").unwrap();
+            write!(answer_str, "**Answer**: {answer}").unwrap();
         }
 
         serenity::CreateEmbed::new()
