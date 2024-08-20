@@ -231,20 +231,20 @@ async fn setup_channels(
             .description(&question.content)
             .colour(Colour::BLUE);
 
-        if let Some(url) = &question.thumbnail_path {
+        if let Some(url) = &question.image_path {
             // shouldn't really unwrap here but w/e, needs an entire rewrite anyway.
             let name = url.strip_prefix("files/").unwrap();
-            embed = embed.thumbnail(format!("attachment://{name}"));
+            embed = embed.image(format!("attachment://{name}"));
         }
 
         let mut builder = CreateMessage::new().embed(embed).components(components);
 
-        if let Some(url) = &question.thumbnail_path {
+        if let Some(url) = &question.image_path {
             let attachment = CreateAttachment::path(url).await;
             if let Ok(attachment) = attachment {
                 builder = builder.add_file(attachment);
             } else {
-                println!("Could not set thumbnail for question {index}");
+                println!("Could not set image for question {index}");
             }
         }
 
@@ -284,64 +284,6 @@ async fn setup_channels(
     }
 
     ctx.say("Setup complete!").await?;
-
-    Ok(())
-}
-
-/// Preview an embed.
-#[poise::command(slash_command, prefix_command, owners_only)]
-pub async fn preview(
-    ctx: Context<'_>,
-    question_number: usize,
-    #[description = "Preview as image instead of thumbnail"] image: Option<bool>,
-) -> Result<(), Error> {
-    let image = image.unwrap_or(false);
-
-    let question = {
-        let data = ctx.data();
-        let room = data.escape_room.read();
-        let q = room.questions.get(question_number - 1).cloned();
-        q
-    };
-
-    let Some(question) = question else {
-        ctx.say("There is no question with that number!").await?;
-        return Ok(());
-    };
-
-    let mut embed = CreateEmbed::new()
-        .title(format!("Question #{question_number}"))
-        .description(&question.content)
-        .colour(Colour::BLUE);
-
-    if let Some(url) = &question.thumbnail_path {
-        // shouldn't really unwrap here but w/e, needs an entire rewrite anyway.
-        let name = url.strip_prefix("files/").unwrap();
-        if image {
-            embed = embed.attachment(name);
-        } else {
-            embed = embed.thumbnail(format!("attachment://{name}"));
-        }
-    }
-
-    let mut builder = CreateReply::new().embed(embed);
-
-    if let Some(url) = &question.thumbnail_path {
-        let attachment = CreateAttachment::path(url).await;
-        if let Ok(attachment) = attachment {
-            builder = builder.attachment(attachment);
-        };
-    }
-
-    ctx.send(builder).await?;
-
-    // This is its own message to avoid the embed being below the attachment.
-    if let Some(url) = &question.attachment_path {
-        let attachment = CreateAttachment::path(url).await;
-        if let Ok(attachment) = attachment {
-            ctx.send(CreateReply::new().attachment(attachment)).await?;
-        }
-    }
 
     Ok(())
 }

@@ -28,7 +28,7 @@ pub struct EscapeRoom {
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct Question {
     pub content: String,
-    pub thumbnail_path: Option<String>,
+    pub image_path: Option<String>,
     pub attachment_path: Option<String>,
     pub parts: Vec<QuestionPart>,
     pub channel: Option<ChannelId>,
@@ -46,7 +46,7 @@ impl Question {
     pub fn new(content: String, parts: Vec<QuestionPart>) -> Self {
         Question {
             content,
-            thumbnail_path: None,
+            image_path: None,
             attachment_path: None,
             parts,
             channel: None,
@@ -56,12 +56,12 @@ impl Question {
 
     /// Sets the thumbnail path to the specified string.
     /// Will automatically specify `files/`.
-    fn _set_thumbnail_path(mut self, url: &str) -> Result<Self, ()> {
+    fn _set_image_path(mut self, url: &str) -> Result<Self, ()> {
         // not perfect but will do, always can redesign later.
         let path_str = format!("files/{url}");
         let path = Path::new(&path_str);
         if path.exists() {
-            self.thumbnail_path = Some(path_str);
+            self.image_path = Some(path_str);
         } else {
             return Err(());
         };

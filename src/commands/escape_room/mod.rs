@@ -209,7 +209,7 @@ pub async fn confirm_fixed_err(ctx: Context<'_>, user_id: UserId) -> Result<(), 
     Ok(())
 }
 
-pub fn commands() -> [Command; 8] {
+pub fn commands() -> [Command; 7] {
     [
         list_questions(),
         list_question_details(),
@@ -218,6 +218,5 @@ pub fn commands() -> [Command; 8] {
         modify::reorder(),
         setup::setup(),
         setup::activate(),
-        setup::preview(),
     ]
 }
