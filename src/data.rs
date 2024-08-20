@@ -1,9 +1,8 @@
 use crate::Error;
 use parking_lot::RwLock;
-use poise::serenity_prelude::{ChannelId, Colour, CreateEmbed, GuildId, UserId};
+use poise::serenity_prelude::{ChannelId, GuildId, UserId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::Write;
 use std::path::Path;
 
 pub struct Data {
@@ -54,7 +53,7 @@ impl Question {
         }
     }
 
-    /// Sets the thumbnail path to the specified string.
+    /// Sets the image path to the specified string.
     /// Will automatically specify `files/`.
     fn _set_image_path(mut self, url: &str) -> Result<Self, ()> {
         // not perfect but will do, always can redesign later.
@@ -69,7 +68,7 @@ impl Question {
         Ok(self)
     }
 
-    /// Sets the thumbnail path to the specified string.
+    /// Sets the image path to the specified string.
     /// Will automatically specify `files/`.
     fn _set_attachment_path(mut self, url: &str) -> Result<Self, ()> {
         // not perfect but will do, always can redesign later.
@@ -82,65 +81,6 @@ impl Question {
         };
 
         Ok(self)
-    }
-
-    /// produce an embed with the answers.
-    pub fn as_embed(&self) -> CreateEmbed {
-        // different looking response with one part.
-        let description = if self.parts.len() > 1 {
-            self.multi_part()
-        } else {
-            self.solo_part()
-        };
-
-        CreateEmbed::new()
-            .title("Question Answers")
-            .description(description)
-            .colour(Colour::BLUE)
-    }
-
-    fn solo_part(&self) -> String {
-        let def_str = "**Answers:**\n";
-        let def = String::from(def_str);
-
-        let part = self.parts.first().unwrap();
-        let answers_str = part
-            .answers
-            .iter()
-            .enumerate()
-            .fold(def, |mut acc, (i, a)| {
-                writeln!(acc, "{i}. {a}").unwrap();
-                acc
-            });
-        if answers_str == def_str {
-            String::from("There are no answers!")
-        } else {
-            answers_str
-        }
-    }
-
-    fn multi_part(&self) -> String {
-        // - Question
-        //  - Answer
-        //  - Answer
-
-        let def_str = "**Parts:**\n";
-        let def = String::from(def_str);
-
-        let answers_str = self.parts.iter().fold(def, |mut acc, p| {
-            writeln!(acc, "- {}", p.content).unwrap();
-            p.answers.iter().fold(acc, |mut acc, a| {
-                writeln!(acc, " - {a}").unwrap();
-                acc
-            })
-        });
-
-        // shouldn't trigger anyway.
-        if answers_str == def_str {
-            String::from("There are no parts!")
-        } else {
-            answers_str
-        }
     }
 }
 
