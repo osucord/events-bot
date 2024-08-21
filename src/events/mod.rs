@@ -4,17 +4,21 @@ use crate::{
     data::{Data, Question},
     Error, FrameworkContext,
 };
+use cooldown::{
+    check_cooldown, check_wrong_question_cooldown, wrong_answer_cooldown_handler,
+    wrong_question_cooldown_handler,
+};
 use move_channel::move_to_next_channel;
 use poise::serenity_prelude::{
     self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponse,
     CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateQuickModal,
 };
 
-use log::log;
-
+mod cooldown;
 mod log;
 mod move_channel;
 use aformat::aformat;
+use log::log;
 use small_fixed_array::{FixedArray, FixedString};
 
 pub async fn handler(
@@ -38,15 +42,19 @@ async fn handle_component(
     framework: FrameworkContext<'_>,
     press: &ComponentInteraction,
 ) -> Result<(), Error> {
-    let Ok((question, next_channel, log_channel, right_question, index)) =
-        checks(&framework.user_data(), press)
+    let data = framework.user_data();
+    let Ok((question, next_channel, log_channel, right_question, index)) = checks(&data, press)
     else {
         return Ok(());
     };
 
     // uh oh.
     if let Some(right_question) = right_question {
-        wrong_question_response(framework, press, right_question).await?;
+        if !check_wrong_question_cooldown(&data, press.user.id) {
+            let _ = wrong_question_response(framework, press, right_question).await;
+        }
+        wrong_question_cooldown_handler(&data, press.user.id);
+
         return Err(aformat!(
             "<@{}> managed to answer the wrong question, please investigate.",
             press.user.id.get()
@@ -66,6 +74,20 @@ async fn handle_component(
         return Ok(());
     }
 
+    if let Some(cooldown) = check_cooldown(&data, press.user.id, index) {
+        press
+            .create_followup(
+                &framework.serenity_context.http,
+                CreateInteractionResponseFollowup::new()
+                    .ephemeral(true)
+                    .content(format!(
+                        "You are answering too fast! Please wait {} seconds before trying again!",
+                        cooldown.as_secs()
+                    )),
+            )
+            .await?;
+    }
+
     // open modal, take response, check it against the answers, done.
     let answers = get_answer(framework.serenity_context, press.clone(), question.clone()).await;
 
@@ -82,14 +104,15 @@ async fn handle_component(
     });
 
     if !matches_answers {
-        press
+        wrong_answer_cooldown_handler(&data, press.user.id, index);
+        let _ = press
             .create_followup(
                 &framework.serenity_context.http,
                 CreateInteractionResponseFollowup::new()
                     .ephemeral(true)
                     .content("That was not the right answer!"),
             )
-            .await?;
+            .await;
 
         log(
             framework.serenity_context,
@@ -142,7 +165,7 @@ fn checks(
         Option<ChannelId>,
         Option<ChannelId>,
         Option<usize>,
-        usize,
+        u16,
     ),
     (),
 > {
@@ -177,12 +200,13 @@ fn checks(
 
     room.write_questions().unwrap();
 
+    #[allow(clippy::cast_possible_truncation)]
     Ok((
         question.clone(),
         next_channel,
         log_channel,
         right_question,
-        index,
+        index as u16,
     ))
 }
 
@@ -231,8 +255,7 @@ async fn wrong_question_response(
         let description = format!(
             "Somebody answered the wrong question either because I fucked up/they clicked the \
              modal AGAIN before I moved them, Discord fucked up or they have Administrator.\nThey \
-             answered <#{}> when they are supposed to answer <#{}>\n\nTODO: restore perms on \
-             rejoin and possible check for stupid Administrators",
+             answered <#{}> when they are supposed to answer <#{}>",
             press.channel_id, right_channel
         );
         let embed = serenity::CreateEmbed::new()

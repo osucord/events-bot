@@ -10,7 +10,7 @@ pub async fn log(
     ctx: &Context,
     user: &User,
     answers: FixedArray<FixedString<u16>>,
-    q_num: usize,
+    q_num: u16,
     log_channel: Option<ChannelId>,
     correct: bool,
 ) {
