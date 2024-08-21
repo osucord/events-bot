@@ -17,6 +17,7 @@ use poise::serenity_prelude::{
 mod cooldown;
 mod log;
 mod move_channel;
+mod rejoin;
 use aformat::aformat;
 use log::log;
 use small_fixed_array::{FixedArray, FixedString};
@@ -33,6 +34,14 @@ pub async fn handler(
             serenity::Interaction::Component(press) => handle_component(framework, press).await?,
             _ => return Ok(()),
         },
+        serenity::FullEvent::GuildMemberAddition { new_member } => {
+            rejoin::handle(framework, new_member);
+        }
+        serenity::FullEvent::GuildMemberRemoval {
+            guild_id: _,
+            user,
+            member_data_if_available: _,
+        } => rejoin::leave(framework, user.id),
         _ => {}
     }
     Ok(())
@@ -49,6 +58,21 @@ async fn handle_component(
 
     // uh oh.
     if let Some(right_question) = right_question {
+        // they are attempting the first question, this should only happen if they left
+        // and rejoined.
+        // TODO: at some point in the next 1000 years make a proper case that restores them
+        // though, there should be no reason that I'd have to because this is stupid to begin with.
+        // Why leave, rejoin then attempt to play the same event you tried originally?
+        if index == 0 {
+            {
+                data.escape_room
+                    .write()
+                    .user_progress
+                    .remove(&press.user.id);
+            };
+            data.write_questions().unwrap();
+        }
+
         if !check_wrong_question_cooldown(&data, press.user.id) {
             let _ = wrong_question_response(framework, press, right_question).await;
         }
