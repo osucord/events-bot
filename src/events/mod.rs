@@ -1,7 +1,12 @@
-use crate::{data::Question, Error, FrameworkContext};
+use std::sync::Arc;
+
+use crate::{
+    data::{Data, Question},
+    Error, FrameworkContext,
+};
 use move_channel::move_to_next_channel;
 use poise::serenity_prelude::{
-    self as serenity, ComponentInteraction, CreateInteractionResponse,
+    self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponse,
     CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateQuickModal,
 };
 
@@ -9,7 +14,6 @@ use log::log;
 
 mod log;
 mod move_channel;
-
 use aformat::aformat;
 use small_fixed_array::{FixedArray, FixedString};
 
@@ -30,53 +34,14 @@ pub async fn handler(
     Ok(())
 }
 
-#[allow(clippy::too_many_lines)] // entire thing needs a rewrite anyway.
 async fn handle_component(
     framework: FrameworkContext<'_>,
     press: &ComponentInteraction,
 ) -> Result<(), Error> {
-    // right_question will only have a value when the user is on the wrong question.
-    // the value is the right question.
-    let (question, next_channel, log_channel, right_question, index) = {
-        let data = framework.user_data();
-        let mut room = data.escape_room.write();
-        let expected_question = *room.user_progress.entry(press.user.id).or_insert(1);
-
-        // If its not active, don't allow interactions to run.
-        if !room.active {
-            return Ok(());
-        };
-
-        let custom_id = press.data.custom_id.as_str();
-        let q = room
-            .questions
-            .iter()
-            .enumerate()
-            .find(|(_, q)| q.custom_id.as_ref().is_some_and(|id| *id == *custom_id));
-
-        let Some((index, question)) = q else {
-            return Ok(());
-        };
-
-        let next_channel = room.questions.get(index + 1).and_then(|q| q.channel);
-        let log_channel = room.analytics_channel;
-        // If the user is on the wrong question they either have Administrator or have a permission
-        // override they shouldn't have, or something else has gone wrong.
-        let right_question = if index + 1 == expected_question {
-            None
-        } else {
-            Some(expected_question)
-        };
-
-        room.write_questions().unwrap();
-
-        (
-            question.clone(),
-            next_channel,
-            log_channel,
-            right_question,
-            index,
-        )
+    let Ok((question, next_channel, log_channel, right_question, index)) =
+        checks(&framework.user_data(), press)
+    else {
+        return Ok(());
     };
 
     // uh oh.
@@ -128,7 +93,7 @@ async fn handle_component(
 
         log(
             framework.serenity_context,
-            press.user.clone(),
+            &press.user,
             answers,
             index + 1,
             log_channel,
@@ -155,7 +120,7 @@ async fn handle_component(
 
     log(
         framework.serenity_context,
-        press.user.clone(),
+        &press.user,
         answers,
         index + 1,
         log_channel,
@@ -163,9 +128,62 @@ async fn handle_component(
     )
     .await;
 
-    move_to_next_channel(framework, q_channel, press.user.id).await?;
+    move_to_next_channel(framework, q_channel, press.user.id).await
+}
 
-    Ok(())
+// a refactor could make this way more simple.
+#[allow(clippy::type_complexity)]
+fn checks(
+    data: &Arc<Data>,
+    press: &ComponentInteraction,
+) -> Result<
+    (
+        Question,
+        Option<ChannelId>,
+        Option<ChannelId>,
+        Option<usize>,
+        usize,
+    ),
+    (),
+> {
+    let mut room = data.escape_room.write();
+    let expected_question = *room.user_progress.entry(press.user.id).or_insert(1);
+
+    // If its not active, don't allow interactions to run.
+    if !room.active {
+        return Err(());
+    };
+
+    let custom_id = press.data.custom_id.as_str();
+    let q = room
+        .questions
+        .iter()
+        .enumerate()
+        .find(|(_, q)| q.custom_id.as_ref().is_some_and(|id| *id == *custom_id));
+
+    let Some((index, question)) = q else {
+        return Err(());
+    };
+
+    let next_channel = room.questions.get(index + 1).and_then(|q| q.channel);
+    let log_channel = room.analytics_channel;
+    // If the user is on the wrong question they either have Administrator or have a permission
+    // override they shouldn't have, or something else has gone wrong.
+    let right_question = if index + 1 == expected_question {
+        None
+    } else {
+        Some(expected_question)
+    };
+
+    room.write_questions().unwrap();
+
+    Ok((
+        question.clone(),
+        next_channel,
+        log_channel,
+        right_question,
+        index,
+    ))
 }
 
 async fn wrong_question_response(

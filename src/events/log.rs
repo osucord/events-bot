@@ -8,7 +8,7 @@ use tokio::{fs::OpenOptions, io::AsyncWriteExt};
 
 pub async fn log(
     ctx: &Context,
-    user: User,
+    user: &User,
     answers: FixedArray<FixedString<u16>>,
     q_num: usize,
     log_channel: Option<ChannelId>,
@@ -26,7 +26,7 @@ pub async fn log(
     if let Some(channel) = log_channel {
         let _ = tokio::join!(
             create_or_push_line(&log_msg),
-            channel.send_message(ctx, CreateMessage::new().embed(msg.to_embed(&user)))
+            channel.send_message(ctx, CreateMessage::new().embed(msg.to_embed(user)))
         );
     } else {
         let _ = create_or_push_line(&log_msg).await;
