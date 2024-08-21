@@ -1,5 +1,6 @@
 use poise::serenity_prelude::{
-    self as serenity, ChannelId, PermissionOverwrite, PermissionOverwriteType, Permissions, UserId,
+    self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponseFollowup,
+    PermissionOverwrite, PermissionOverwriteType, Permissions, UserId,
 };
 
 use crate::{Error, FrameworkContext};
@@ -9,8 +10,8 @@ use tokio::time::sleep;
 
 pub async fn move_to_next_channel(
     framework: FrameworkContext<'_>,
+    press: &ComponentInteraction,
     q_channel: ChannelId,
-    user_id: UserId,
 ) -> Result<(), Error> {
     let mut is_first_question = false;
     let next_question = {
@@ -37,7 +38,7 @@ pub async fn move_to_next_channel(
     };
 
     let Some(next_question) = next_question else {
-        win(framework, user_id, q_channel, is_first_question).await?;
+        win(framework, press, q_channel, is_first_question).await?;
         return Ok(());
     };
 
@@ -45,9 +46,20 @@ pub async fn move_to_next_channel(
         return Err(format!("Could not find a channel for {next_question:?}").into());
     };
 
+    let _ = press
+        .create_followup(
+            &framework.serenity_context.http,
+            CreateInteractionResponseFollowup::new()
+                .ephemeral(true)
+                .content(format!(
+                    "That was the correct answer, please proceed to <#{next_channel}>!"
+                )),
+        )
+        .await;
+
     handle_overwrite(
         framework,
-        user_id,
+        press.user.id,
         is_first_question,
         q_channel,
         next_channel,
@@ -59,16 +71,15 @@ pub async fn move_to_next_channel(
 
 /// A function for winning that I would honestly like all in one function but the code sucks
 /// elsewhere.
-///
-/// TODO: merge with the other function.
 async fn win(
     framework: FrameworkContext<'_>,
-    user_id: UserId,
+    press: &ComponentInteraction,
     current_channel: ChannelId,
     is_first_question: bool,
 ) -> Result<(), Error> {
     // get room.
     let data = framework.user_data();
+    let user_id = press.user.id;
     let (channel_id, first) = {
         let mut room = data.escape_room.write();
 
@@ -87,6 +98,15 @@ async fn win(
     let Some(channel_id) = channel_id else {
         return Err(format!("{user_id} could not win because there is no winning channel!").into());
     };
+
+    let _ = press
+        .create_followup(
+            &framework.serenity_context.http,
+            CreateInteractionResponseFollowup::new()
+                .ephemeral(true)
+                .content(format!("You won the escape room! <#{channel_id}>!")),
+        )
+        .await;
 
     let http = &framework.serenity_context.http;
 

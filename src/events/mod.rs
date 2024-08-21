@@ -43,8 +43,7 @@ async fn handle_component(
     press: &ComponentInteraction,
 ) -> Result<(), Error> {
     let data = framework.user_data();
-    let Ok((question, next_channel, log_channel, right_question, index)) = checks(&data, press)
-    else {
+    let Ok((question, log_channel, right_question, index)) = checks(&data, press) else {
         return Ok(());
     };
 
@@ -127,20 +126,6 @@ async fn handle_component(
         return Ok(());
     }
 
-    // get next channel_id.
-    if let Some(next_channel) = next_channel {
-        let _ = press
-            .create_followup(
-                &framework.serenity_context.http,
-                CreateInteractionResponseFollowup::new()
-                    .ephemeral(true)
-                    .content(format!(
-                        "That was the correct answer, please proceed to <#{next_channel}>!"
-                    )),
-            )
-            .await;
-    }
-
     log(
         framework.serenity_context,
         &press.user,
@@ -151,7 +136,7 @@ async fn handle_component(
     )
     .await;
 
-    move_to_next_channel(framework, q_channel, press.user.id).await
+    move_to_next_channel(framework, press, q_channel).await
 }
 
 // a refactor could make this way more simple.
@@ -159,16 +144,7 @@ async fn handle_component(
 fn checks(
     data: &Arc<Data>,
     press: &ComponentInteraction,
-) -> Result<
-    (
-        Question,
-        Option<ChannelId>,
-        Option<ChannelId>,
-        Option<usize>,
-        u16,
-    ),
-    (),
-> {
+) -> Result<(Question, Option<ChannelId>, Option<usize>, u16), ()> {
     let mut room = data.escape_room.write();
     let expected_question = *room.user_progress.entry(press.user.id).or_insert(1);
 
@@ -188,7 +164,6 @@ fn checks(
         return Err(());
     };
 
-    let next_channel = room.questions.get(index + 1).and_then(|q| q.channel);
     let log_channel = room.analytics_channel;
     // If the user is on the wrong question they either have Administrator or have a permission
     // override they shouldn't have, or something else has gone wrong.
@@ -201,13 +176,7 @@ fn checks(
     room.write_questions().unwrap();
 
     #[allow(clippy::cast_possible_truncation)]
-    Ok((
-        question.clone(),
-        next_channel,
-        log_channel,
-        right_question,
-        index as u16,
-    ))
+    Ok((question.clone(), log_channel, right_question, index as u16))
 }
 
 async fn wrong_question_response(
