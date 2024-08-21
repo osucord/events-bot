@@ -215,7 +215,7 @@ async fn setup_channels(
         let custom_id = aformat!("{ctx_id}_{}", index - 1);
 
         // modify the question.
-        question.custom_id = Some(custom_id.to_string());
+        question.custom_id = Some(custom_id);
         question.channel = Some(channel.id);
 
         let components = vec![CreateActionRow::Buttons(vec![serenity::CreateButton::new(
@@ -231,7 +231,7 @@ async fn setup_channels(
         if let Some(url) = &question.image_path {
             // shouldn't really unwrap here but w/e, needs an entire rewrite anyway.
             let name = url.strip_prefix("files/").unwrap();
-            embed = embed.image(format!("attachment://{name}"));
+            embed = embed.attachment(name);
         }
 
         let mut builder = CreateMessage::new().embed(embed).components(components);

@@ -53,7 +53,7 @@ async fn handle_component(
             .questions
             .iter()
             .enumerate()
-            .find(|(_, q)| q.custom_id.as_ref().is_some_and(|id| *id == custom_id));
+            .find(|(_, q)| q.custom_id.as_ref().is_some_and(|id| *id == *custom_id));
 
         let Some((index, question)) = q else {
             return Ok(());

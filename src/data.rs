@@ -1,4 +1,5 @@
 use crate::Error;
+use aformat::ArrayString;
 use parking_lot::RwLock;
 use poise::serenity_prelude::{ChannelId, GuildId, UserId};
 use serde::{Deserialize, Serialize};
@@ -31,7 +32,7 @@ pub struct Question {
     pub attachment_path: Option<String>,
     pub parts: Vec<QuestionPart>,
     pub channel: Option<ChannelId>,
-    pub custom_id: Option<String>,
+    pub custom_id: Option<ArrayString<26>>,
 }
 
 /// A part of a question containing its own answers and content.
