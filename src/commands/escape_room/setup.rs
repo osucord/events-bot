@@ -111,9 +111,12 @@ pub async fn setup(
     let required = get_required_bot_perms();
     let missing_permissions = required & !permissions;
     if missing_permissions.bits() != 0 {
-        write!(error_message,
-            "I need at least {required} on the category to do this!\n\nI am missing {missing_permissions}"
-        ).unwrap();
+        write!(
+            error_message,
+            "I need at least {required} on the category to do this!\n\nI am missing \
+             {missing_permissions}"
+        )
+        .unwrap();
     }
 
     if !error_message.is_empty() {
