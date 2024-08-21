@@ -1,18 +1,17 @@
 use crate::{data::Question, Error, FrameworkContext};
 use move_channel::move_to_next_channel;
 use poise::serenity_prelude::{
-    self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponse,
-    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateQuickModal, User,
-    UserId,
+    self as serenity, ComponentInteraction, CreateInteractionResponse,
+    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateQuickModal,
 };
 
-use std::fmt::Write;
+use log::log;
 
+mod log;
 mod move_channel;
 
 use aformat::aformat;
 use small_fixed_array::{FixedArray, FixedString};
-use tokio::{fs::OpenOptions, io::AsyncWriteExt};
 
 pub async fn handler(
     event: &serenity::FullEvent,
@@ -261,90 +260,4 @@ async fn get_answer(
         .await?;
 
     Ok(response.inputs)
-}
-
-#[derive(serde::Serialize)]
-struct QuestionLogMessage {
-    user: UserId,
-    answers: FixedArray<FixedString<u16>>,
-    q_num: String,
-    correct: bool,
-}
-
-impl QuestionLogMessage {
-    fn to_embed(&self, user: &User) -> serenity::CreateEmbed<'_> {
-        let (title, colour) = if self.correct {
-            (
-                format!("Question {} answered correctly", self.q_num),
-                serenity::Colour::DARK_GREEN,
-            )
-        } else {
-            (
-                format!("Question {} answered incorrectly", self.q_num),
-                serenity::Colour::RED,
-            )
-        };
-
-        let author = serenity::CreateEmbedAuthor::new(user.name.clone()).icon_url(user.face());
-
-        let mut answer_str = String::new();
-        for answer in &self.answers {
-            write!(answer_str, "**Answer**: {answer}").unwrap();
-        }
-
-        serenity::CreateEmbed::new()
-            .title(title)
-            .colour(colour)
-            .author(author)
-            .description(answer_str)
-    }
-}
-
-async fn log(
-    ctx: &serenity::Context,
-    user: User,
-    answers: FixedArray<FixedString<u16>>,
-    q_num: usize,
-    log_channel: Option<ChannelId>,
-    correct: bool,
-) {
-    let msg = QuestionLogMessage {
-        user: user.id,
-        answers,
-        q_num: q_num.to_string(),
-        correct,
-    };
-
-    let log_msg = serde_json::to_string(&msg).unwrap();
-
-    if let Some(channel) = log_channel {
-        let _ = tokio::join!(
-            create_or_push_line(&log_msg),
-            channel.send_message(
-                ctx,
-                serenity::CreateMessage::new().embed(msg.to_embed(&user))
-            )
-        );
-    } else {
-        let _ = create_or_push_line(&log_msg).await;
-    }
-}
-
-async fn create_or_push_line(line: &str) -> Result<(), Error> {
-    let file_path = "answers_log.jsonl";
-
-    let mut file = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(file_path)
-        .await?;
-
-    file.write_all(line.as_bytes()).await?;
-    file.write_all(b"\n").await?;
-    Ok(())
-}
-
-#[derive(Debug, poise::Modal)]
-struct Answer {
-    answer: String,
 }

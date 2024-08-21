@@ -10,20 +10,6 @@ use poise::serenity_prelude::{
     PermissionOverwriteType, Permissions, UserId,
 };
 
-/// Additionally the bot require `MANAGE_ROLES`, but for some reason this is required
-/// ON the actual roles and not a permission overwrite.
-fn get_required_bot_perms() -> Permissions {
-    get_deny_perms() | Permissions::MANAGE_CHANNELS
-}
-
-/// These permissions are to be removed from users, but the bot needs them to do that.
-fn get_deny_perms() -> Permissions {
-    Permissions::VIEW_CHANNEL
-        | Permissions::SEND_MESSAGES
-        | Permissions::ADD_REACTIONS
-        | Permissions::MANAGE_MESSAGES
-}
-
 /// Start the escape room!
 #[poise::command(
     aliases("start"),
@@ -197,7 +183,7 @@ async fn setup_channels(
     let perms = get_perm_overwrites(guild_id, bot_id);
 
     // Used for the question numbers.
-    let mut index: u16 = 1;
+    let mut index = 1_u16;
 
     // Discord doesn't allow more than 500 channels, we are not even gonna get close.
     #[allow(clippy::cast_possible_truncation)]
@@ -283,6 +269,20 @@ async fn setup_channels(
     ctx.say("Setup complete!").await?;
 
     Ok(())
+}
+
+/// Additionally the bot require `MANAGE_ROLES`, but for some reason this is required
+/// ON the actual roles and not a permission overwrite.
+fn get_required_bot_perms() -> Permissions {
+    get_deny_perms() | Permissions::MANAGE_CHANNELS
+}
+
+/// These permissions are to be removed from users, but the bot needs them to do that.
+fn get_deny_perms() -> Permissions {
+    Permissions::VIEW_CHANNEL
+        | Permissions::SEND_MESSAGES
+        | Permissions::ADD_REACTIONS
+        | Permissions::MANAGE_MESSAGES
 }
 
 fn get_perm_overwrites(guild_id: GuildId, bot_id: UserId) -> [PermissionOverwrite; 2] {

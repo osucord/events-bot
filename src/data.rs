@@ -5,6 +5,7 @@ use poise::serenity_prelude::{ChannelId, GuildId, UserId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Instant;
 
 pub struct Data {
     pub escape_room: RwLock<EscapeRoom>,
@@ -23,6 +24,18 @@ pub struct EscapeRoom {
     // if errors happened when trying to go into the next question.
     // contains a bool to say if its hard failed and no longer retrying.
     pub reprocessing: HashMap<UserId, bool>,
+    #[serde(skip)]
+    pub cooldowns: CooldownHandler,
+}
+
+/// Holds the last invocation time of an interaction for a user.
+#[derive(Default, Debug)]
+pub struct CooldownHandler {
+    /// Standard wrong answer cooldown.
+    pub wrong_answer: HashMap<(UserId, u16), Instant>,
+    /// Cooldown to prevent mass mention of staff when something goes wrong, best case scenario
+    /// this is never used.
+    pub wrong_question: HashMap<UserId, Instant>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
