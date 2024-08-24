@@ -116,16 +116,7 @@ async fn handle_component(
 
     let Ok(answers) = answers else { return Ok(()) };
 
-    let matches_answers = answers.iter().enumerate().all(|(i, a)| {
-        question
-            .parts
-            .get(i)
-            .unwrap()
-            .answers
-            .iter()
-            .any(|ans| ans.eq_ignore_ascii_case(a))
-    });
-
+    let matches_answers = matches_answers(&answers, &question);
     if !matches_answers {
         wrong_answer_cooldown_handler(&data, press.user.id, index);
         let _ = press
@@ -161,6 +152,32 @@ async fn handle_component(
     .await;
 
     move_to_next_channel(framework, press, q_channel).await
+}
+
+fn matches_answers(answers: &FixedArray<FixedString<u16>>, question: &Question) -> bool {
+    let matches_string = answers.iter().enumerate().all(|(i, a)| {
+        question
+            .parts
+            .get(i)
+            .unwrap()
+            .answers
+            .iter()
+            .any(|ans| ans.eq_ignore_ascii_case(a))
+    });
+
+    if matches_string {
+        return true;
+    };
+
+    answers.iter().enumerate().all(|(i, a)| {
+        question
+            .parts
+            .get(i)
+            .unwrap()
+            .regex_answers
+            .iter()
+            .any(|ans| ans.is_match(a))
+    })
 }
 
 // a refactor could make this way more simple.

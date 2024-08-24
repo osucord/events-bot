@@ -2,10 +2,12 @@ use crate::Error;
 use aformat::ArrayString;
 use parking_lot::RwLock;
 use poise::serenity_prelude::{ChannelId, GuildId, UserId};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serialize::regex_patterns;
 use std::collections::HashMap;
-use std::path::Path;
 use std::time::Instant;
+mod serialize;
 
 pub struct Data {
     pub escape_room: RwLock<EscapeRoom>,
@@ -21,6 +23,7 @@ pub struct EscapeRoom {
     pub analytics_channel: Option<ChannelId>,
     pub questions: Vec<Question>,
     pub user_progress: HashMap<UserId, usize>,
+    pub start_end_time: HashMap<UserId, (u64, Option<u64>)>,
     // if errors happened when trying to go into the next question.
     // contains a bool to say if its hard failed and no longer retrying.
     pub reprocessing: HashMap<UserId, bool>,
@@ -38,7 +41,7 @@ pub struct CooldownHandler {
     pub wrong_question: HashMap<UserId, Instant>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Question {
     pub content: String,
     pub image_path: Option<String>,
@@ -49,10 +52,12 @@ pub struct Question {
 }
 
 /// A part of a question containing its own answers and content.
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct QuestionPart {
     pub content: String,
     pub answers: Vec<String>,
+    #[serde(with = "regex_patterns")]
+    pub regex_answers: Vec<Regex>,
 }
 
 impl Question {
@@ -65,36 +70,6 @@ impl Question {
             channel: None,
             custom_id: None,
         }
-    }
-
-    /// Sets the image path to the specified string.
-    /// Will automatically specify `files/`.
-    fn _set_image_path(mut self, url: &str) -> Result<Self, ()> {
-        // not perfect but will do, always can redesign later.
-        let path_str = format!("files/{url}");
-        let path = Path::new(&path_str);
-        if path.exists() {
-            self.image_path = Some(path_str);
-        } else {
-            return Err(());
-        };
-
-        Ok(self)
-    }
-
-    /// Sets the image path to the specified string.
-    /// Will automatically specify `files/`.
-    fn _set_attachment_path(mut self, url: &str) -> Result<Self, ()> {
-        // not perfect but will do, always can redesign later.
-        let path_str = format!("files/{url}");
-        let path = Path::new(&path_str);
-        if path.exists() {
-            self.attachment_path = Some(path_str);
-        } else {
-            return Err(());
-        };
-
-        Ok(self)
     }
 }
 
@@ -186,6 +161,7 @@ impl Data {
                 escape_room.error_channel = config.error_channel;
                 escape_room.analytics_channel = config.analytics_channel;
                 escape_room.winner_channel = config.winner_channel;
+                escape_room.start_end_time = config.start_end_time;
             }
             Err(_) => {
                 return Err("Cannot read escape room configuration!".into());
