@@ -21,7 +21,7 @@ pub type Command = poise::Command<Data, Error>;
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
         poise::FrameworkError::Command { error, ctx, .. } => {
-            println!("Error in command `{}`: {:?}", ctx.command().name, error);
+            let _ = ctx.say(format!("Error in command: {error}")).await;
         }
         poise::FrameworkError::CommandCheckFailed { error, ctx, .. } => {
             let error_msg = error.map_or_else(
