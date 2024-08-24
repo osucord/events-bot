@@ -127,18 +127,6 @@ async fn handle_component(
                     .content("That was not the right answer!"),
             )
             .await;
-
-        log(
-            framework.serenity_context,
-            &press.user,
-            answers,
-            index + 1,
-            log_channel,
-            false,
-        )
-        .await;
-
-        return Ok(());
     }
 
     log(
@@ -147,11 +135,14 @@ async fn handle_component(
         answers,
         index + 1,
         log_channel,
-        true,
+        matches_answers,
     )
     .await;
 
-    move_to_next_channel(framework, press, q_channel).await
+    if matches_answers {
+        move_to_next_channel(framework, press, q_channel).await?;
+    }
+    Ok(())
 }
 
 fn matches_answers(answers: &FixedArray<FixedString<u16>>, question: &Question) -> bool {
