@@ -334,9 +334,9 @@ async fn handle_overwrite(
                     "Add permissions to this question then run `fixed-err`!",
                 ));
 
-            // ping ruben and lilith.
+            // ping Ruben Lilith and Phil.
             let msg = serenity::CreateMessage::new()
-                .content("<@291089948709486593> <@158567567487795200>")
+                .content("<@291089948709486593> <@158567567487795200> <@101090238067113984>")
                 .embed(embed);
             event_committee
                 .send_message(framework.serenity_context, msg)
