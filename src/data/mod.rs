@@ -118,7 +118,6 @@ impl Data {
 
     pub fn load_questions(&self) -> Result<(), Error> {
         let questions_file = std::fs::read_to_string("escape_room.json");
-
         match questions_file {
             Ok(questions) => self._load_questions(&questions)?,
             Err(error) => match error.kind() {

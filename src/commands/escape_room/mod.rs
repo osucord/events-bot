@@ -19,7 +19,7 @@ pub fn commands() -> [crate::Command; 4] {
 /// Bumps the question number of the user without touching the permissions, this should only be
 /// used if something terribly wrong happens and the bot cannot finish what its doing.
 #[poise::command(
-    aliases("fixed-err"),
+    rename = "fixed-err",
     prefix_command,
     slash_command,
     owners_only,
@@ -49,7 +49,7 @@ pub async fn fixed_err(
 
 /// Sets the current question of the user.
 #[poise::command(
-    aliases("set-question"),
+    rename = "set-question",
     prefix_command,
     slash_command,
     owners_only,
@@ -59,7 +59,8 @@ pub async fn set_question(
     ctx: Context<'_>,
     #[description = "The user whos state will be modified."] user_id: UserId,
     #[description = "Question to set user to."] question: u16,
-    #[description = "Modify permissions? (defaults to true, will throw an error if permissions are not fixed manually.)"]
+    #[description = "Modify permissions? (defaults to true, will throw an error if permissions \
+                     are not fixed manually.)"]
     modify_permissions: Option<bool>,
 ) -> Result<(), Error> {
     let Some(question) = question.checked_sub(1) else {
@@ -84,7 +85,11 @@ pub async fn set_question(
         let data = ctx.data();
         let room = data.escape_room.read();
         let mut channels = room.questions.iter().map(|q| q.channel).collect::<Vec<_>>();
-        let add = channels.remove(question as usize);
+        let add = if (question as usize) < channels.len() {
+            channels.remove(question as usize)
+        } else {
+            None
+        };
         (room.guild, channels, add)
     };
 
