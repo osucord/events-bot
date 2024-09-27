@@ -255,7 +255,7 @@ async fn setup_channels(
         let mut room = data.escape_room.write();
         room.guild = ctx.guild_id();
         room.questions = questions;
-        room.winner_channel = Some(channel.id);
+        room.winners.winner_channel = Some(channel.id);
         room.write_questions().unwrap();
     }
 

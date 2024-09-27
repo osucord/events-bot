@@ -1,7 +1,7 @@
 use crate::Error;
 use aformat::ArrayString;
 use parking_lot::RwLock;
-use poise::serenity_prelude::{ChannelId, GuildId, UserId};
+use poise::serenity_prelude::{ChannelId, GuildId, RoleId, UserId};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serialize::regex_patterns;
@@ -17,8 +17,7 @@ pub struct Data {
 pub struct EscapeRoom {
     pub active: bool,
     pub guild: Option<GuildId>,
-    pub winner: Option<UserId>,
-    pub winner_channel: Option<ChannelId>,
+    pub winners: Winners,
     pub error_channel: Option<ChannelId>,
     pub analytics_channel: Option<ChannelId>,
     pub questions: Vec<Question>,
@@ -29,6 +28,14 @@ pub struct EscapeRoom {
     pub reprocessing: HashMap<UserId, bool>,
     #[serde(skip)]
     pub cooldowns: CooldownHandler,
+}
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct Winners {
+    pub first_winner: Option<UserId>,
+    pub winner_channel: Option<ChannelId>,
+    pub first_winner_role: Option<RoleId>,
+    pub winner_role: Option<RoleId>,
 }
 
 /// Holds the last invocation time of an interaction for a user.
@@ -151,7 +158,7 @@ impl Data {
             Ok(config) => {
                 let mut escape_room = self.escape_room.write();
 
-                escape_room.winner = config.winner;
+                escape_room.winners = config.winners;
                 escape_room.guild = config.guild;
                 escape_room.active = config.active;
                 escape_room.questions = config.questions;
@@ -159,7 +166,6 @@ impl Data {
                 escape_room.reprocessing = config.reprocessing;
                 escape_room.error_channel = config.error_channel;
                 escape_room.analytics_channel = config.analytics_channel;
-                escape_room.winner_channel = config.winner_channel;
                 escape_room.start_end_time = config.start_end_time;
             }
             Err(_) => {

@@ -322,7 +322,7 @@ async fn wrong_question_response(
             .send_message(
                 &framework.serenity_context.http,
                 serenity::CreateMessage::new()
-                    // Lilith and Ruben
+                    // Lilith, Ruben and Phil
                     .content("<@158567567487795200> <@291089948709486593> <@101090238067113984>")
                     .embed(embed),
             )

@@ -83,10 +83,10 @@ async fn win(
     let (channel_id, first) = {
         let mut room = data.escape_room.write();
 
-        let first = room.winner.is_none();
-        room.winner.get_or_insert(user_id);
+        let first = room.winners.first_winner.is_none();
+        room.winners.first_winner.get_or_insert(user_id);
 
-        (room.winner_channel, first)
+        (room.winners.winner_channel, first)
     };
 
     // this is here to prevent deadlocks.
