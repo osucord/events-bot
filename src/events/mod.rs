@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::hash_map::Entry, sync::Arc};
 
 use crate::{
     data::{Data, Question},
@@ -18,6 +18,7 @@ mod cooldown;
 mod log;
 mod move_channel;
 mod rejoin;
+use ::serenity::all::CreateMessage;
 use aformat::aformat;
 use log::log;
 use small_fixed_array::{FixedArray, FixedString};
@@ -47,19 +48,63 @@ pub async fn handler(
     Ok(())
 }
 
+// Discord ids will never be small enough for this.
+#[allow(clippy::cast_sign_loss)]
+// oh my god this is pain.
+#[allow(clippy::too_many_lines)]
 async fn handle_component(
     framework: FrameworkContext<'_>,
     press: &ComponentInteraction,
 ) -> Result<(), Error> {
     let data = framework.user_data();
-    let Ok((question, log_channel, right_question, index)) = checks(&data, press) else {
+    let Ok((question, log_channel, right_question, index, question_count)) = checks(&data, press)
+    else {
         return Ok(());
     };
+
+    let mut send_dumb_error = false;
+    if index == 0 {
+        // why try_insert unstable?
+        {
+            data.escape_room
+                .write()
+                .start_end_time
+                .entry(press.user.id)
+                .or_insert((press.id.created_at().unix_timestamp() as u64, None));
+        }
+        data.write_questions().unwrap();
+    } else if index + 1 == question_count {
+        match data.escape_room.write().start_end_time.entry(press.user.id) {
+            Entry::Occupied(mut e) => {
+                let (_, end) = e.get_mut();
+                *end = Some(press.id.created_at().unix_timestamp() as u64);
+            }
+            Entry::Vacant(_) => send_dumb_error = true,
+        }
+        data.write_questions().unwrap();
+    }
+
+    if send_dumb_error {
+        let error_channel = { data.escape_room.read().error_channel };
+        if let Some(error_channel) = error_channel {
+            let _ = error_channel
+                .send_message(
+                    &framework.serenity_context.http,
+                    CreateMessage::new().content(format!(
+                        "<@{}> attempted to finish escape room at <t:{}> without starting \
+                         timestamp?",
+                        press.user.id,
+                        press.id.created_at().unix_timestamp()
+                    )),
+                )
+                .await;
+        }
+    }
 
     // uh oh.
     if let Some(right_question) = right_question {
         // they are attempting the first question, this should only happen if they left
-        // and rejoined.
+        // and rejoined (or if the bot failed to move them from the first question).
         // TODO: at some point in the next 1000 years make a proper case that restores them
         // though, there should be no reason that I'd have to because this is stupid to begin with.
         // Why leave, rejoin then attempt to play the same event you tried originally?
@@ -78,12 +123,15 @@ async fn handle_component(
         }
         wrong_question_cooldown_handler(&data, press.user.id);
 
-        return Err(aformat!(
-            "<@{}> managed to answer the wrong question, please investigate.",
-            press.user.id.get()
-        )
-        .as_str()
-        .into());
+        // This *should* be the right way to handle it? check future moxy.
+        if index != 0 {
+            return Err(aformat!(
+                "<@{}> managed to answer the wrong question, please investigate.",
+                press.user.id.get()
+            )
+            .as_str()
+            .into());
+        }
     }
 
     // if its not set, it *is* possible to ignore this and continue.
@@ -176,7 +224,7 @@ fn matches_answers(answers: &FixedArray<FixedString<u16>>, question: &Question) 
 fn checks(
     data: &Arc<Data>,
     press: &ComponentInteraction,
-) -> Result<(Question, Option<ChannelId>, Option<usize>, u16), ()> {
+) -> Result<(Question, Option<ChannelId>, Option<usize>, u16, u16), ()> {
     let mut room = data.escape_room.write();
     let expected_question = *room.user_progress.entry(press.user.id).or_insert(1);
 
@@ -208,7 +256,13 @@ fn checks(
     room.write_questions().unwrap();
 
     #[allow(clippy::cast_possible_truncation)]
-    Ok((question.clone(), log_channel, right_question, index as u16))
+    Ok((
+        question.clone(),
+        log_channel,
+        right_question,
+        index as u16,
+        room.questions.len() as u16,
+    ))
 }
 
 async fn wrong_question_response(
@@ -269,7 +323,7 @@ async fn wrong_question_response(
                 &framework.serenity_context.http,
                 serenity::CreateMessage::new()
                     // Lilith and Ruben
-                    .content("<@158567567487795200> <@291089948709486593>")
+                    .content("<@158567567487795200> <@291089948709486593> <@101090238067113984>")
                     .embed(embed),
             )
             .await?;
