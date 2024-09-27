@@ -1,6 +1,6 @@
 use poise::serenity_prelude::{
-    self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponseFollowup,
-    PermissionOverwrite, PermissionOverwriteType, Permissions, UserId,
+    self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponseFollowup, GuildId,
+    Http, PermissionOverwrite, PermissionOverwriteType, Permissions, RoleId, UserId,
 };
 
 use crate::{Error, FrameworkContext};
@@ -79,19 +79,29 @@ async fn win(
 ) -> Result<(), Error> {
     // get room.
     let data = framework.user_data();
+    let http = &framework.serenity_context.http;
     let user_id = press.user.id;
-    let (channel_id, first) = {
+    let (channel_id, first, guild_id, first_winner_role, winner_role) = {
         let mut room = data.escape_room.write();
 
         let first = room.winners.first_winner.is_none();
         room.winners.first_winner.get_or_insert(user_id);
 
-        (room.winners.winner_channel, first)
+        (
+            room.winners.winner_channel,
+            first,
+            room.guild,
+            room.winners.first_winner_role,
+            room.winners.winner_role,
+        )
     };
 
     // this is here to prevent deadlocks.
     if first {
         data.write_questions().unwrap();
+        apply_role(http, guild_id, user_id, first_winner_role).await;
+    } else {
+        apply_role(http, guild_id, user_id, winner_role).await;
     }
 
     // Mirror of the above, without extra checks.
@@ -169,6 +179,18 @@ async fn win(
     }
 
     Ok(())
+}
+
+/// A function that adds a role to the user that helps with the option handling.
+async fn apply_role(
+    http: &Http,
+    guild_id: Option<GuildId>,
+    user_id: UserId,
+    role_id: Option<RoleId>,
+) {
+    let Some(guild_id) = guild_id else { return };
+    let Some(role_id) = role_id else { return };
+    let _ = http.add_member_role(guild_id, user_id, role_id, None).await;
 }
 
 async fn handle_permission_operation(
