@@ -78,23 +78,17 @@ pub async fn setup(
         return Ok(());
     };
 
-    let (permissions, has_manage_roles, empty_category) = {
+    let (permissions, has_manage_roles) = {
         let Some(guild) = ctx.guild() else {
             ctx.say("Unable to check guild cache.").await?;
             return Ok(());
         };
-
-        let empty = !guild
-            .channels
-            .iter()
-            .any(|c| c.parent_id == Some(category.id));
 
         let member_perms = guild.member_permissions(&member);
 
         (
             guild.user_permissions_in(&category, &member),
             member_perms.manage_roles(),
-            empty,
         )
     };
 
@@ -102,10 +96,6 @@ pub async fn setup(
     if !has_manage_roles {
         error_message
             .push_str("I don't have manage roles, I need this on my user, not on the category!\n");
-    }
-
-    if !empty_category {
-        error_message.push_str("The category should be empty!\n");
     }
 
     let required = get_required_bot_perms();
