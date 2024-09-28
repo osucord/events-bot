@@ -73,7 +73,7 @@ impl QuestionLogMessage {
 
         let mut answer_str = String::new();
         for answer in &self.answers {
-            write!(answer_str, "**Answer**: {answer}").unwrap();
+            writeln!(answer_str, "**Answer**: {answer}").unwrap();
         }
 
         CreateEmbed::new()

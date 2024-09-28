@@ -1,4 +1,4 @@
-use aformat::{aformat, ArrayString, ToArrayString};
+use aformat::{aformat, ToArrayString};
 use std::fmt::Write;
 
 use crate::{Context, Error};
@@ -16,39 +16,62 @@ use poise::{
     slash_command,
     owners_only,
     guild_only,
-    subcommands("progress"),
+    subcommands("progress_slash"),
     subcommand_required
 )]
 pub async fn leaderboard(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Display leaderboards!
 #[poise::command(prefix_command, owners_only, guild_only)]
 pub async fn progress(ctx: Context<'_>) -> Result<(), Error> {
+    progress_inner(ctx).await
+}
+
+#[poise::command(rename = "progress", slash_command, owners_only, guild_only)]
+pub async fn progress_slash(ctx: Context<'_>) -> Result<(), Error> {
+    progress_inner(ctx).await
+}
+
+pub async fn progress_inner(ctx: Context<'_>) -> Result<(), Error> {
     let map = { ctx.data().escape_room.read().user_progress.clone() };
+    let winners_map = { ctx.data().escape_room.read().winners.winners.clone() };
 
     let mut result = Vec::new();
-    // 25 + 8 (usize) x 10 (to be honest, i could go much smaller, i'm not dealing with big values.)
-    let mut current_string: ArrayString<330> = ArrayString::new();
+    let mut current_string = String::new();
     let mut count = 0;
 
-    for (key, value) in map {
-        write!(current_string, "<@{}>: {value}", key.get()).unwrap();
+    for user in winners_map {
+        writeln!(current_string, "<@{user}>: completed.",).unwrap();
         count += 1;
 
         if count == 10 {
             result.push(current_string);
-            current_string = ArrayString::new();
+            current_string = String::new();
             count = 0;
         }
     }
 
-    let Some(first) = result.first().copied() else {
+    for (key, value) in map {
+        writeln!(current_string, "<@{}>: {value}", key.get()).unwrap();
+        count += 1;
+
+        if count == 10 {
+            result.push(current_string);
+            current_string = String::new();
+            count = 0;
+        }
+    }
+
+    result.push(current_string);
+
+    let Some(first) = result.first() else {
         ctx.say("Nobody has answered yet.").await?;
         return Ok(());
     };
 
-    let builder = CreateReply::new().embed(generate_embed(&first));
+    let builder = CreateReply::new().embed(generate_embed(first));
 
     let is_multipage = result.len() > 1;
     if !is_multipage {
@@ -107,7 +130,6 @@ pub async fn progress(ctx: Context<'_>) -> Result<(), Error> {
         CreateReply::new().embed(generate_embed(&result[current_page])),
     )
     .await?;
-
     Ok(())
 }
 

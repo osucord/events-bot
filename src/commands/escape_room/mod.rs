@@ -2,7 +2,9 @@ mod setup;
 mod utils;
 
 use crate::{Context, Error};
-use serenity::all::{ChannelId, PermissionOverwrite, PermissionOverwriteType, Permissions, UserId};
+use serenity::all::{
+    ChannelId, PermissionOverwrite, PermissionOverwriteType, Permissions, User, UserId,
+};
 const REASON: Option<&str> = Some("User has had their question set manually.");
 
 pub fn commands() -> [crate::Command; 4] {
@@ -27,17 +29,17 @@ pub fn commands() -> [crate::Command; 4] {
 )]
 pub async fn fixed_err(
     ctx: Context<'_>,
-    #[description = "The user whos state will be fixed."] user_id: UserId,
+    #[description = "The user whos state will be fixed."] user: User,
 ) -> Result<(), Error> {
-    let status = ctx.data().overwrite_err_check(user_id);
+    let status = ctx.data().overwrite_err_check(user.id);
 
     if status.is_none() {
         ctx.say("The user doesn't have an error flag set.").await?;
         return Ok(());
     };
 
-    ctx.data().overwrite_err(user_id, None);
-    let q = ctx.data().user_next_question(user_id);
+    ctx.data().overwrite_err(user.id, None);
+    let q = ctx.data().user_next_question(user.id);
     ctx.say(format!(
         "Removing error, ensure you set permissions correctly, User is now set to question \
          **{q}**."
@@ -57,7 +59,7 @@ pub async fn fixed_err(
 )]
 pub async fn set_question(
     ctx: Context<'_>,
-    #[description = "The user whos state will be modified."] user_id: UserId,
+    #[description = "The user whos state will be modified."] user: User,
     #[description = "Question to set user to."] question: u16,
     #[description = "Modify permissions? (defaults to true, will throw an error if permissions \
                      are not fixed manually.)"]
@@ -73,7 +75,7 @@ pub async fn set_question(
             .escape_room
             .write()
             .user_progress
-            .insert(user_id, question as usize);
+            .insert(user.id, question as usize + 1);
     }
     ctx.data().write_questions().unwrap();
 
@@ -108,28 +110,28 @@ pub async fn set_question(
         let Some(q) = q else { continue };
 
         if question == 0 {
-            remove_overwrite(ctx, user_id, q).await?;
+            remove_overwrite(ctx, user.id, q).await?;
             continue;
         }
 
-        if i == 0 {
+        if question == 0 && i == 0 {
             q.create_permission(
                 ctx.http(),
                 PermissionOverwrite {
                     allow: Permissions::VIEW_CHANNEL,
                     deny: Permissions::empty(),
-                    kind: PermissionOverwriteType::Member(user_id),
+                    kind: PermissionOverwriteType::Member(user.id),
                 },
                 REASON,
             )
             .await?;
         } else {
-            remove_overwrite(ctx, user_id, q).await?;
+            remove_overwrite(ctx, user.id, q).await?;
         }
     }
 
     if question == 0 {
-        remove_overwrite(ctx, user_id, addition).await?;
+        remove_overwrite(ctx, user.id, addition).await?;
     } else {
         addition
             .create_permission(
@@ -137,7 +139,7 @@ pub async fn set_question(
                 PermissionOverwrite {
                     allow: Permissions::VIEW_CHANNEL,
                     deny: Permissions::empty(),
-                    kind: PermissionOverwriteType::Member(user_id),
+                    kind: PermissionOverwriteType::Member(user.id),
                 },
                 REASON,
             )

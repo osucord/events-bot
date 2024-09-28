@@ -243,7 +243,7 @@ async fn setup_channels(
     }
 
     // create winners room.
-    let builder = serenity::CreateChannel::new("name-me")
+    let builder = serenity::CreateChannel::new("the-end")
         .permissions(&perms)
         .category(category_id)
         .position(pos);

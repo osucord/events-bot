@@ -33,6 +33,8 @@ pub struct EscapeRoom {
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Winners {
     pub first_winner: Option<UserId>,
+    #[allow(clippy::struct_field_names)]
+    pub winners: Vec<UserId>,
     pub winner_channel: Option<ChannelId>,
     pub first_winner_role: Option<RoleId>,
     pub winner_role: Option<RoleId>,

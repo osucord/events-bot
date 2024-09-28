@@ -85,6 +85,7 @@ async fn win(
         let mut room = data.escape_room.write();
 
         let first = room.winners.first_winner.is_none();
+        room.winners.winners.push(user_id);
         room.winners.first_winner.get_or_insert(user_id);
 
         (
@@ -101,6 +102,7 @@ async fn win(
         data.write_questions().unwrap();
         apply_role(http, guild_id, user_id, first_winner_role).await;
     } else {
+        data.write_questions().unwrap();
         apply_role(http, guild_id, user_id, winner_role).await;
     }
 
