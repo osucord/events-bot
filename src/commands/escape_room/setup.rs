@@ -3,11 +3,12 @@ use std::{fmt::Write, sync::Arc};
 
 use crate::commands::checks::not_active;
 use crate::commands::escape_room::utils::activate::unlock_first_channel;
+use crate::data::Question;
 use crate::{Context, Data, Error};
 use poise::serenity_prelude::{
     self as serenity, ChannelId, ChannelType, Colour, CreateActionRow, CreateAttachment,
     CreateEmbed, CreateMessage, GuildChannel, GuildId, PermissionOverwrite,
-    PermissionOverwriteType, Permissions, UserId,
+    PermissionOverwriteType, Permissions, RoleId, UserId,
 };
 
 /// Start the escape room!
@@ -152,16 +153,27 @@ fn check_setup(data: &Arc<Data>) -> (bool, bool) {
     (setup, unanswerable)
 }
 
+#[allow(clippy::too_many_lines)]
 async fn setup_channels(
     ctx: Context<'_>,
     guild_id: GuildId,
     category_id: ChannelId,
     bot_id: UserId,
 ) -> Result<(), Error> {
-    let mut questions = {
+    let (mut questions, first_winner_role, winner_role) = {
         let data = ctx.data();
-        let q = data.escape_room.read().questions.clone();
-        q
+        let room = data.escape_room.read();
+        (
+            room.questions.clone(),
+            room.winners.first_winner_role,
+            room.winners.winner_role,
+        )
+    };
+
+    let (Some(first_winner_role), Some(winner_role)) = (first_winner_role, winner_role) else {
+        ctx.say("winner roles have not been configured correctly!")
+            .await?;
+        return Ok(());
     };
 
     if questions.is_empty() {
@@ -173,22 +185,43 @@ async fn setup_channels(
 
     let ctx_id = ctx.id();
 
-    let perms = get_perm_overwrites(guild_id, bot_id);
+    // we don't need a role 1, so we can skip this.
+    let mut index = 2_u16;
+    for question in questions.iter_mut().skip(1) {
+        let name = aformat!("question-{index}");
+        let role = guild_id
+            .create_role(
+                ctx.http(),
+                serenity::EditRole::new()
+                    .name(name.as_str())
+                    .mentionable(false)
+                    .hoist(false),
+            )
+            .await?;
 
-    // Used for the question numbers.
-    let mut index = 1_u16;
+        question.role_id = Some(role.id);
+        index += 1;
+    }
 
-    // Discord doesn't allow more than 500 channels, we are not even gonna get close.
     #[allow(clippy::cast_possible_truncation)]
     let mut pos = questions.len() as u16;
+    let mut index = 1_u16;
 
+    let first_permissions =
+        get_first_question_overrides(&questions, guild_id, bot_id, first_winner_role, winner_role);
     for question in &mut questions {
         let channel_name = aformat!("question-{index}");
-
-        let builder = serenity::CreateChannel::new(channel_name.as_str())
-            .permissions(&perms)
+        let mut builder = serenity::CreateChannel::new(channel_name.as_str())
             .category(category_id)
             .position(pos);
+
+        let perms = get_perm_overwrites(guild_id, bot_id, question.role_id.unwrap());
+        if index == 1 {
+            builder = builder.permissions(&first_permissions);
+        } else {
+            builder = builder.permissions(&perms);
+        }
+
         let channel = guild_id.create_channel(ctx, builder).await?;
 
         let custom_id = aformat!("{ctx_id}_{}", index - 1);
@@ -243,8 +276,9 @@ async fn setup_channels(
     }
 
     // create winners room.
+    let winner_perms = get_winner_overrides(guild_id, bot_id, first_winner_role, winner_role);
     let builder = serenity::CreateChannel::new("the-end")
-        .permissions(&perms)
+        .permissions(&winner_perms)
         .category(category_id)
         .position(pos);
 
@@ -278,7 +312,11 @@ fn get_deny_perms() -> Permissions {
         | Permissions::MANAGE_MESSAGES
 }
 
-fn get_perm_overwrites(guild_id: GuildId, bot_id: UserId) -> [PermissionOverwrite; 2] {
+fn get_perm_overwrites(
+    guild_id: GuildId,
+    bot_id: UserId,
+    role_id: RoleId,
+) -> [PermissionOverwrite; 3] {
     let deny = get_deny_perms();
     let bot_allow = get_required_bot_perms();
 
@@ -293,5 +331,88 @@ fn get_perm_overwrites(guild_id: GuildId, bot_id: UserId) -> [PermissionOverwrit
             deny: Permissions::empty(),
             kind: PermissionOverwriteType::Member(bot_id),
         },
+        PermissionOverwrite {
+            allow: Permissions::VIEW_CHANNEL,
+            deny: Permissions::empty(),
+            kind: PermissionOverwriteType::Role(role_id),
+        },
     ]
+}
+
+fn get_winner_overrides(
+    guild_id: GuildId,
+    bot_id: UserId,
+    first_winner: RoleId,
+    winner: RoleId,
+) -> [PermissionOverwrite; 4] {
+    let deny = get_deny_perms();
+    let bot_allow = get_required_bot_perms();
+    [
+        PermissionOverwrite {
+            allow: Permissions::empty(),
+            deny,
+            kind: PermissionOverwriteType::Role(guild_id.get().into()),
+        },
+        PermissionOverwrite {
+            allow: bot_allow, // the bot needs these perms.
+            deny: Permissions::empty(),
+            kind: PermissionOverwriteType::Member(bot_id),
+        },
+        PermissionOverwrite {
+            allow: deny,
+            deny: Permissions::empty(),
+            kind: PermissionOverwriteType::Role(first_winner),
+        },
+        PermissionOverwrite {
+            allow: deny,
+            deny: Permissions::empty(),
+            kind: PermissionOverwriteType::Role(winner),
+        },
+    ]
+}
+
+fn get_first_question_overrides(
+    questions: &Vec<Question>,
+    guild_id: GuildId,
+    bot_id: UserId,
+    first_winner: RoleId,
+    winner: RoleId,
+) -> Vec<PermissionOverwrite> {
+    let deny = get_deny_perms();
+    let bot_allow = get_required_bot_perms();
+
+    let mut role_overwrites = Vec::with_capacity(questions.len() + 1);
+    for q in questions {
+        if let Some(role) = q.role_id {
+            role_overwrites.push(PermissionOverwrite {
+                allow: Permissions::empty(),
+                deny,
+                kind: PermissionOverwriteType::Role(role),
+            });
+        }
+    }
+    role_overwrites.extend([
+        PermissionOverwrite {
+            allow: Permissions::empty(),
+            deny,
+            kind: PermissionOverwriteType::Role(guild_id.get().into()),
+        },
+        PermissionOverwrite {
+            allow: Permissions::empty(),
+            deny,
+            kind: PermissionOverwriteType::Role(first_winner),
+        },
+        PermissionOverwrite {
+            allow: Permissions::empty(),
+            deny,
+            kind: PermissionOverwriteType::Role(winner),
+        },
+        PermissionOverwrite {
+            allow: bot_allow, // the bot needs these perms.
+            deny: Permissions::empty(),
+            kind: PermissionOverwriteType::Member(bot_id),
+        },
+    ]);
+
+    role_overwrites
 }

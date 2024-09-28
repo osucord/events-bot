@@ -2,51 +2,10 @@ mod setup;
 mod utils;
 
 use crate::{Context, Error};
-use serenity::all::{
-    ChannelId, PermissionOverwrite, PermissionOverwriteType, Permissions, User, UserId,
-};
-const REASON: Option<&str> = Some("User has had their question set manually.");
+use serenity::all::{EditMember, Member};
 
-pub fn commands() -> [crate::Command; 4] {
-    [
-        fixed_err(),
-        setup::setup(),
-        setup::activate(),
-        set_question(),
-    ]
-}
-
-/// Manually mark the users state fixed on a question.
-///
-/// Bumps the question number of the user without touching the permissions, this should only be
-/// used if something terribly wrong happens and the bot cannot finish what its doing.
-#[poise::command(
-    rename = "fixed-err",
-    prefix_command,
-    slash_command,
-    owners_only,
-    guild_only
-)]
-pub async fn fixed_err(
-    ctx: Context<'_>,
-    #[description = "The user whos state will be fixed."] user: User,
-) -> Result<(), Error> {
-    let status = ctx.data().overwrite_err_check(user.id);
-
-    if status.is_none() {
-        ctx.say("The user doesn't have an error flag set.").await?;
-        return Ok(());
-    };
-
-    ctx.data().overwrite_err(user.id, None);
-    let q = ctx.data().user_next_question(user.id);
-    ctx.say(format!(
-        "Removing error, ensure you set permissions correctly, User is now set to question \
-         **{q}**."
-    ))
-    .await?;
-
-    Ok(())
+pub fn commands() -> [crate::Command; 3] {
+    [setup::setup(), setup::activate(), set_question()]
 }
 
 /// Sets the current question of the user.
@@ -59,13 +18,13 @@ pub async fn fixed_err(
 )]
 pub async fn set_question(
     ctx: Context<'_>,
-    #[description = "The user whos state will be modified."] user: User,
-    #[description = "Question to set user to."] question: u16,
+    #[description = "The user whos state will be modified."] mut member: Member,
+    #[description = "Question to set user to."] question_num: u16,
     #[description = "Modify permissions? (defaults to true, will throw an error if permissions \
                      are not fixed manually.)"]
     modify_permissions: Option<bool>,
 ) -> Result<(), Error> {
-    let Some(question) = question.checked_sub(1) else {
+    let Some(question_num) = question_num.checked_sub(1) else {
         ctx.say("There cannot be a 0th question.").await?;
         return Ok(());
     };
@@ -75,7 +34,7 @@ pub async fn set_question(
             .escape_room
             .write()
             .user_progress
-            .insert(user.id, question as usize + 1);
+            .insert(member.user.id, question_num as usize + 1);
     }
     ctx.data().write_questions().unwrap();
 
@@ -83,101 +42,39 @@ pub async fn set_question(
         return Ok(());
     }
 
-    let (guild_id, questions, addition) = {
+    let mut member_roles = member.roles.to_vec();
+
+    {
         let data = ctx.data();
         let room = data.escape_room.read();
-        let mut channels = room.questions.iter().map(|q| q.channel).collect::<Vec<_>>();
-        let add = if (question as usize) < channels.len() {
-            channels.remove(question as usize)
+
+        if question_num == 1 {
+            for question in &room.questions {
+                if let Some(role_id) = question.role_id {
+                    // Check if the role_id exists in the member's roles and remove it
+                    member_roles.retain(|&role| role != role_id);
+                }
+            }
         } else {
-            None
-        };
-        (room.guild, channels, add)
-    };
+            for (index, question) in room.questions.iter().enumerate() {
+                #[allow(clippy::cast_possible_truncation)]
+                if question_num - 1 != index as u16 {
+                    continue;
+                }
+                let Some(role) = question.role_id else {
+                    continue;
+                };
 
-    if guild_id != ctx.guild_id() {
-        ctx.say("You are not in the right guild.").await?;
-        return Ok(());
-    }
-
-    let Some(addition) = addition else {
-        ctx.say(format!("There is no question **{question}**."))
-            .await?;
-        return Ok(());
-    };
-
-    for (i, q) in questions.iter().copied().enumerate() {
-        let Some(q) = q else { continue };
-
-        if question == 0 {
-            remove_overwrite(ctx, user.id, q).await?;
-            continue;
+                if let Some(pos) = member_roles.iter().position(|&r| r == role) {
+                    member_roles.remove(pos);
+                };
+            }
         }
-
-        if question == 0 && i == 0 {
-            q.create_permission(
-                ctx.http(),
-                PermissionOverwrite {
-                    allow: Permissions::VIEW_CHANNEL,
-                    deny: Permissions::empty(),
-                    kind: PermissionOverwriteType::Member(user.id),
-                },
-                REASON,
-            )
-            .await?;
-        } else {
-            remove_overwrite(ctx, user.id, q).await?;
-        }
-    }
-
-    if question == 0 {
-        remove_overwrite(ctx, user.id, addition).await?;
-    } else {
-        addition
-            .create_permission(
-                ctx.http(),
-                PermissionOverwrite {
-                    allow: Permissions::VIEW_CHANNEL,
-                    deny: Permissions::empty(),
-                    kind: PermissionOverwriteType::Member(user.id),
-                },
-                REASON,
-            )
-            .await?;
-    }
-
-    Ok(())
-}
-
-async fn remove_overwrite(
-    ctx: Context<'_>,
-    user_id: UserId,
-    channel_id: ChannelId,
-) -> Result<(), Error> {
-    let overwrites = if let Some(cache) = ctx.guild() {
-        cache
-            .channels
-            .iter()
-            .find(|c| c.id == channel_id)
-            .map(|c| c.permission_overwrites.clone())
-    } else {
-        None
     };
 
-    let perm_type = PermissionOverwriteType::Member(user_id);
-
-    let Some(overwrites) = overwrites else {
-        channel_id
-            .delete_permission(ctx.http(), perm_type, REASON)
-            .await?;
-        return Ok(());
-    };
-
-    if overwrites.iter().any(|o| o.kind == perm_type) {
-        channel_id
-            .delete_permission(ctx.http(), perm_type, REASON)
-            .await?;
-    }
+    member
+        .edit(ctx.http(), EditMember::new().roles(member_roles))
+        .await?;
 
     Ok(())
 }

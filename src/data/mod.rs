@@ -58,6 +58,8 @@ pub struct Question {
     pub parts: Vec<QuestionPart>,
     pub channel: Option<ChannelId>,
     pub custom_id: Option<ArrayString<26>>,
+    /// Is None when not set up or if first question.
+    pub role_id: Option<RoleId>,
 }
 
 /// A part of a question containing its own answers and content.
@@ -78,6 +80,7 @@ impl Question {
             parts,
             channel: None,
             custom_id: None,
+            role_id: None,
         }
     }
 }

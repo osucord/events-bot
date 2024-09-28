@@ -1,44 +1,50 @@
+use ::serenity::all::{CreateAllowedMentions, CreateMessage};
 use poise::serenity_prelude::{
-    self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponseFollowup, GuildId,
-    Http, PermissionOverwrite, PermissionOverwriteType, Permissions, RoleId, UserId,
+    ChannelId, ComponentInteraction, CreateInteractionResponseFollowup, GuildId, RoleId, UserId,
 };
 
 use crate::{Error, FrameworkContext};
-
-use std::time::Duration;
-use tokio::time::sleep;
 
 pub async fn move_to_next_channel(
     framework: FrameworkContext<'_>,
     press: &ComponentInteraction,
     q_channel: ChannelId,
 ) -> Result<(), Error> {
-    let mut is_first_question = false;
-    let next_question = {
+    let (next_question, remove_role) = {
         let data = framework.user_data();
         let room = data.escape_room.read();
         let mut next_question = None;
+        let mut remove_role = None;
 
-        // Find the index of the question that matches q_channel
         if let Some(index) = room
             .questions
             .iter()
             .position(|q| q.channel == Some(q_channel))
         {
-            if index == 0 {
-                is_first_question = true;
-            }
+            // less than ideal code but it works at least.
+            let question = &room.questions[index];
+            remove_role = question.role_id;
 
             if index + 1 < room.questions.len() {
                 next_question = Some(room.questions[index + 1].clone());
             }
         }
 
-        next_question
+        (next_question, remove_role)
+    };
+
+    let Some(remove_role) = remove_role else {
+        println!("A role to remove is missing, its impossible to proceed safely.");
+        return Ok(());
     };
 
     let Some(next_question) = next_question else {
-        win(framework, press, q_channel, is_first_question).await?;
+        win(framework, press, remove_role).await?;
+        return Ok(());
+    };
+
+    let Some(add_role) = next_question.role_id else {
+        println!("A role is missing, its impossible to proceed safely.");
         return Ok(());
     };
 
@@ -59,10 +65,10 @@ pub async fn move_to_next_channel(
 
     handle_overwrite(
         framework,
+        press.guild_id.unwrap(),
         press.user.id,
-        is_first_question,
-        q_channel,
-        next_channel,
+        remove_role,
+        add_role,
     )
     .await?;
 
@@ -74,14 +80,14 @@ pub async fn move_to_next_channel(
 async fn win(
     framework: FrameworkContext<'_>,
     press: &ComponentInteraction,
-    current_channel: ChannelId,
-    is_first_question: bool,
+    remove_role: RoleId,
 ) -> Result<(), Error> {
+    let guild_id = press.guild_id.unwrap();
     // get room.
     let data = framework.user_data();
     let http = &framework.serenity_context.http;
     let user_id = press.user.id;
-    let (channel_id, first, guild_id, first_winner_role, winner_role) = {
+    let (channel_id, first, first_winner_role, winner_role) = {
         let mut room = data.escape_room.write();
 
         let first = room.winners.first_winner.is_none();
@@ -91,19 +97,31 @@ async fn win(
         (
             room.winners.winner_channel,
             first,
-            room.guild,
             room.winners.first_winner_role,
             room.winners.winner_role,
         )
     };
 
+    let (Some(first_winner_role), Some(winner_role)) = (first_winner_role, winner_role) else {
+        println!("Unable to win, roles are missing.");
+        return Ok(());
+    };
+
     // this is here to prevent deadlocks.
     if first {
         data.write_questions().unwrap();
-        apply_role(http, guild_id, user_id, first_winner_role).await;
+        let _ = handle_overwrite(
+            framework,
+            guild_id,
+            press.user.id,
+            remove_role,
+            first_winner_role,
+        )
+        .await;
     } else {
         data.write_questions().unwrap();
-        apply_role(http, guild_id, user_id, winner_role).await;
+        let _ =
+            handle_overwrite(framework, guild_id, press.user.id, remove_role, winner_role).await;
     }
 
     // Mirror of the above, without extra checks.
@@ -119,53 +137,6 @@ async fn win(
                 .content(format!("You won the escape room! <#{channel_id}>!")),
         )
         .await;
-
-    let http = &framework.serenity_context.http;
-
-    let reason = "User wins escape room.";
-
-    let result = if is_first_question {
-        let overwrite = PermissionOverwrite {
-            allow: Permissions::empty(),
-            deny: Permissions::VIEW_CHANNEL,
-            kind: PermissionOverwriteType::Member(user_id),
-        };
-        current_channel
-            .create_permission(http, overwrite, Some(reason))
-            .await
-    } else {
-        current_channel
-            .delete_permission(http, PermissionOverwriteType::Member(user_id), Some(reason))
-            .await
-    };
-
-    let result2 = {
-        let overwrite = PermissionOverwrite {
-            allow: Permissions::VIEW_CHANNEL
-                | Permissions::SEND_MESSAGES
-                | Permissions::ADD_REACTIONS,
-            deny: Permissions::empty(),
-            kind: PermissionOverwriteType::Member(user_id),
-        };
-        channel_id
-            .create_permission(http, overwrite, Some(reason))
-            .await
-    };
-
-    if result.is_err() || result2.is_err() {
-        let event_committee = { framework.user_data().escape_room.read().error_channel };
-        let Some(event_committee) = event_committee else {
-            return Ok(());
-        };
-
-        event_committee
-            .say(
-                http,
-                format!("<@{user_id}> won, but I couldn't move them to the winners channel!"),
-            )
-            .await?;
-        return Ok(());
-    }
 
     if first {
         channel_id
@@ -183,172 +154,69 @@ async fn win(
     Ok(())
 }
 
-/// A function that adds a role to the user that helps with the option handling.
-async fn apply_role(
-    http: &Http,
-    guild_id: Option<GuildId>,
-    user_id: UserId,
-    role_id: Option<RoleId>,
-) {
-    let Some(guild_id) = guild_id else { return };
-    let Some(role_id) = role_id else { return };
-    let _ = http.add_member_role(guild_id, user_id, role_id, None).await;
-}
-
-async fn handle_permission_operation(
-    framework: FrameworkContext<'_>,
-    user_id: UserId,
-    retries: &mut usize,
-    channel: ChannelId,
-    overwrite: Option<PermissionOverwrite>,
-    reason: Option<&str>,
-) -> Result<(), Error> {
-    let max_retries = 3;
-    let delay = Duration::from_secs(8);
-
-    let http = &framework.serenity_context.http;
-
-    loop {
-        let result = if let Some(ref overwrite) = overwrite {
-            channel
-                .create_permission(http, overwrite.clone(), reason)
-                .await
-        } else {
-            channel
-                .delete_permission(http, PermissionOverwriteType::Member(user_id), reason)
-                .await
-        };
-
-        match result {
-            Ok(()) => {
-                framework.user_data().overwrite_err(user_id, None);
-                break;
-            }
-            Err(e) => {
-                if *retries >= max_retries {
-                    framework.user_data().overwrite_err(user_id, Some(true));
-                    return Err(e.into());
-                }
-                if *retries == 0 {
-                    framework.user_data().overwrite_err(user_id, Some(false));
-                }
-
-                *retries += 1;
-                println!(
-                    "Failed to handle permissions. Retrying in {} seconds...",
-                    delay.as_secs()
-                );
-                sleep(delay).await;
-            }
-        }
-    }
-    Ok(())
-}
-
 async fn handle_overwrite(
     framework: FrameworkContext<'_>,
+    guild_id: GuildId,
     user_id: UserId,
-    is_first_question: bool,
-    q_channel: ChannelId,
-    next_channel: ChannelId,
+    remove_role: RoleId,
+    add_role: RoleId,
 ) -> Result<(), Error> {
-    let mut retries = 0;
-
-    let (channel, overwrite) = if is_first_question {
-        (
-            q_channel,
-            Some(PermissionOverwrite {
-                allow: Permissions::empty(),
-                deny: Permissions::VIEW_CHANNEL,
-                kind: PermissionOverwriteType::Member(user_id),
-            }),
+    let http = &framework.serenity_context.http;
+    if http
+        .add_member_role(
+            guild_id,
+            user_id,
+            add_role,
+            Some("User moved to the next question."),
         )
-    } else {
-        (q_channel, None)
+        .await
+        .is_err()
+    {
+        handle_err(framework, user_id, remove_role, add_role).await;
+    }
+    if http
+        .remove_member_role(
+            guild_id,
+            user_id,
+            remove_role,
+            Some("User moved to the next question"),
+        )
+        .await
+        .is_err()
+    {
+        handle_err(framework, user_id, remove_role, add_role).await;
     };
-
-    match handle_permission_operation(
-        framework,
-        user_id,
-        &mut retries,
-        channel,
-        overwrite,
-        Some("User loses permissions to questions they answered."),
-    )
-    .await
-    {
-        Ok(()) => {}
-        Err(e) => {
-            let Some(event_committee) = framework.user_data().escape_room.read().error_channel
-            else {
-                return Ok(());
-            };
-            let embed = serenity::CreateEmbed::new()
-                .title("Failure removing permissions to view question")
-                .description(e.to_string())
-                .field("User triggered on", user_id.to_string(), true)
-                .field("channel failed on", format!("<#{channel}>"), true)
-                .footer(serenity::CreateEmbedFooter::new(
-                    "Remove permissions from this question, add to the next, run `fixed-err`!",
-                ));
-
-            // ping ruben and lilith.
-            let msg = serenity::CreateMessage::new()
-                .content("<@291089948709486593> <@158567567487795200>")
-                .embed(embed);
-            event_committee
-                .send_message(framework.serenity_context, msg)
-                .await?;
-            return Ok(()); // escape before more damage can happen.
-        }
-    }
-
-    sleep(Duration::from_secs(10)).await;
-
-    retries = 0;
-
-    match handle_permission_operation(
-        framework,
-        user_id,
-        &mut retries,
-        next_channel,
-        Some(PermissionOverwrite {
-            allow: Permissions::VIEW_CHANNEL,
-            deny: Permissions::empty(),
-            kind: PermissionOverwriteType::Member(user_id),
-        }),
-        Some("User has successfully moved to the next question"),
-    )
-    .await
-    {
-        Ok(()) => {}
-        Err(e) => {
-            let Some(event_committee) = framework.user_data().escape_room.read().error_channel
-            else {
-                return Ok(());
-            };
-            let embed = serenity::CreateEmbed::new()
-                .title("Failure adding permissions to the next question")
-                .description(e.to_string())
-                .field("User triggered on", user_id.to_string(), true)
-                .field("channel failed on", format!("<#{channel}>"), true)
-                .footer(serenity::CreateEmbedFooter::new(
-                    "Add permissions to this question then run `fixed-err`!",
-                ));
-
-            // ping Ruben Lilith and Phil.
-            let msg = serenity::CreateMessage::new()
-                .content("<@291089948709486593> <@158567567487795200> <@101090238067113984>")
-                .embed(embed);
-            event_committee
-                .send_message(framework.serenity_context, msg)
-                .await?;
-            return Ok(()); // escape before more damage can happen.
-        }
-    }
 
     // move them to the right question, good for fixing perms or other stuff.
     framework.user_data().user_next_question(user_id);
 
     Ok(())
+}
+
+async fn handle_err(
+    framework: FrameworkContext<'_>,
+    user_id: UserId,
+    remove_role: RoleId,
+    add_role: RoleId,
+) {
+    let http = &framework.serenity_context.http;
+    let message = format!(
+        "<@101090238067113984> <@291089948709486593> <@158567567487795200> I couldn't modify the \
+         roles properly. Please make sure <@{user_id}> gets <@&{remove_role}> removed and \
+         <@&{add_role}> added!"
+    );
+
+    let error_channel = framework.user_data().escape_room.read().error_channel;
+    if let Some(e_channel) = error_channel {
+        println!("Couldn't resolve permissions for User: {user_id}");
+        // ping Phil, Ruben and James about the fuckup
+        let _ = e_channel
+            .send_message(
+                http,
+                CreateMessage::new()
+                    .content(message)
+                    .allowed_mentions(CreateAllowedMentions::new().roles(&[]).all_users(true)),
+            )
+            .await;
+    }
 }
