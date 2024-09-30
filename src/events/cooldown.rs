@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const WRONG_ANSWER_COOLDOWN: Duration = Duration::from_secs(15);
+const WRONG_ANSWER_COOLDOWN: Duration = Duration::from_secs(300);
 const WRONG_CHANNEL_MESSAGE_COOLDOWN: Duration = Duration::from_secs(1800);
 
 /// Checks the cooldown, returns the Duration left if a cooldown is active.

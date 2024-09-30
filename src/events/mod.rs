@@ -153,7 +153,7 @@ async fn handle_component(
                     .ephemeral(true)
                     .content(format!(
                         "You are answering too fast! Please wait {} seconds before trying again!",
-                        cooldown.as_secs()
+                        format_duration_readable(cooldown)
                     )),
             )
             .await?;
@@ -191,6 +191,19 @@ async fn handle_component(
         move_to_next_channel(framework, press, q_channel).await?;
     }
     Ok(())
+}
+
+fn format_duration_readable(duration: std::time::Duration) -> String {
+    let seconds = duration.as_secs();
+
+    let minutes = seconds / 60;
+    let remaining_seconds = seconds % 60;
+
+    if minutes > 0 {
+        format!("{minutes} minutes, {remaining_seconds} seconds")
+    } else {
+        format!("{remaining_seconds} seconds")
+    }
 }
 
 fn matches_answers(answers: &FixedArray<FixedString<u16>>, question: &Question) -> bool {

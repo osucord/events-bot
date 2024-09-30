@@ -24,17 +24,18 @@ pub async fn set_question(
                      are not fixed manually.)"]
     modify_permissions: Option<bool>,
 ) -> Result<(), Error> {
-    let Some(question_num) = question_num.checked_sub(1) else {
+    let Some(_) = question_num.checked_sub(1) else {
         ctx.say("There cannot be a 0th question.").await?;
         return Ok(());
     };
 
+    ctx.defer().await?;
     {
         ctx.data()
             .escape_room
             .write()
             .user_progress
-            .insert(member.user.id, question_num as usize + 1);
+            .insert(member.user.id, question_num as usize);
     }
     ctx.data().write_questions().unwrap();
 
@@ -44,6 +45,7 @@ pub async fn set_question(
 
     let mut member_roles = member.roles.to_vec();
 
+    let mut failure = false;
     {
         let data = ctx.data();
         let room = data.escape_room.read();
@@ -51,30 +53,43 @@ pub async fn set_question(
         if question_num == 1 {
             for question in &room.questions {
                 if let Some(role_id) = question.role_id {
-                    // Check if the role_id exists in the member's roles and remove it
                     member_roles.retain(|&role| role != role_id);
                 }
             }
         } else {
-            for (index, question) in room.questions.iter().enumerate() {
-                #[allow(clippy::cast_possible_truncation)]
-                if question_num - 1 != index as u16 {
-                    continue;
-                }
+            for question in &room.questions {
                 let Some(role) = question.role_id else {
                     continue;
                 };
 
                 if let Some(pos) = member_roles.iter().position(|&r| r == role) {
                     member_roles.remove(pos);
+                }
+            }
+
+            if let Some(question) = room.questions.get((question_num - 1) as usize) {
+                if let Some(role) = question.role_id {
+                    member_roles.push(role);
+                } else {
+                    failure = true;
                 };
+            } else {
+                failure = true;
             }
         }
     };
 
+    if failure {
+        ctx.say("Could not add roles because I couldn't find the question or role.")
+            .await?;
+        return Ok(());
+    }
+
     member
         .edit(ctx.http(), EditMember::new().roles(member_roles))
         .await?;
+
+    ctx.say("Done!").await?;
 
     Ok(())
 }

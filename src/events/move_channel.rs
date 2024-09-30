@@ -33,11 +33,6 @@ pub async fn move_to_next_channel(
         (next_question, remove_role)
     };
 
-    let Some(remove_role) = remove_role else {
-        println!("A role to remove is missing, its impossible to proceed safely.");
-        return Ok(());
-    };
-
     let Some(next_question) = next_question else {
         win(framework, press, remove_role).await?;
         return Ok(());
@@ -80,7 +75,7 @@ pub async fn move_to_next_channel(
 async fn win(
     framework: FrameworkContext<'_>,
     press: &ComponentInteraction,
-    remove_role: RoleId,
+    remove_role: Option<RoleId>,
 ) -> Result<(), Error> {
     let guild_id = press.guild_id.unwrap();
     // get room.
@@ -158,7 +153,7 @@ async fn handle_overwrite(
     framework: FrameworkContext<'_>,
     guild_id: GuildId,
     user_id: UserId,
-    remove_role: RoleId,
+    remove_role: Option<RoleId>,
     add_role: RoleId,
 ) -> Result<(), Error> {
     let http = &framework.serenity_context.http;
@@ -174,18 +169,21 @@ async fn handle_overwrite(
     {
         handle_err(framework, user_id, remove_role, add_role).await;
     }
-    if http
-        .remove_member_role(
-            guild_id,
-            user_id,
-            remove_role,
-            Some("User moved to the next question"),
-        )
-        .await
-        .is_err()
-    {
-        handle_err(framework, user_id, remove_role, add_role).await;
-    };
+
+    if let Some(remove_role) = remove_role {
+        if http
+            .remove_member_role(
+                guild_id,
+                user_id,
+                remove_role,
+                Some("User moved to the next question"),
+            )
+            .await
+            .is_err()
+        {
+            handle_err(framework, user_id, Some(remove_role), add_role).await;
+        };
+    }
 
     // move them to the right question, good for fixing perms or other stuff.
     framework.user_data().user_next_question(user_id);
@@ -196,15 +194,22 @@ async fn handle_overwrite(
 async fn handle_err(
     framework: FrameworkContext<'_>,
     user_id: UserId,
-    remove_role: RoleId,
+    remove_role: Option<RoleId>,
     add_role: RoleId,
 ) {
     let http = &framework.serenity_context.http;
-    let message = format!(
-        "<@101090238067113984> <@291089948709486593> <@158567567487795200> I couldn't modify the \
-         roles properly. Please make sure <@{user_id}> gets <@&{remove_role}> removed and \
-         <@&{add_role}> added!"
-    );
+    let message = if let Some(remove_role) = remove_role {
+        format!(
+            "<@101090238067113984> <@291089948709486593> <@158567567487795200> I couldn't modify \
+             the roles properly. Please make sure <@{user_id}> gets <@&{remove_role}> removed and \
+             <@&{add_role}> added!"
+        )
+    } else {
+        format!(
+            "<@101090238067113984> <@291089948709486593> <@158567567487795200> I couldn't modify \
+             the roles properly. Please make sure <@{user_id}> gets <@&{add_role}> added!"
+        )
+    };
 
     let error_channel = framework.user_data().escape_room.read().error_channel;
     if let Some(e_channel) = error_channel {

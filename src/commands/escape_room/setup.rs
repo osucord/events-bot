@@ -215,7 +215,8 @@ async fn setup_channels(
             .category(category_id)
             .position(pos);
 
-        let perms = get_perm_overwrites(guild_id, bot_id, question.role_id.unwrap());
+        // this makes an override for no reason but it works for now.
+        let perms = get_perm_overwrites(guild_id, bot_id, question.role_id.unwrap_or_default());
         if index == 1 {
             builder = builder.permissions(&first_permissions);
         } else {
@@ -272,7 +273,7 @@ async fn setup_channels(
         }
 
         index += 1;
-        pos -= 1;
+        pos += 1;
     }
 
     // create winners room.

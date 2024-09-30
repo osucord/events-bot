@@ -29,6 +29,7 @@ pub async fn progress(ctx: Context<'_>) -> Result<(), Error> {
     progress_inner(ctx).await
 }
 
+/// Display leaderboards!
 #[poise::command(rename = "progress", slash_command, owners_only, guild_only)]
 pub async fn progress_slash(ctx: Context<'_>) -> Result<(), Error> {
     progress_inner(ctx).await
@@ -42,8 +43,8 @@ pub async fn progress_inner(ctx: Context<'_>) -> Result<(), Error> {
     let mut current_string = String::new();
     let mut count = 0;
 
-    for user in winners_map {
-        writeln!(current_string, "<@{user}>: completed.",).unwrap();
+    for user in &winners_map {
+        writeln!(current_string, "<@{user}>: completed.").unwrap();
         count += 1;
 
         if count == 10 {
@@ -53,8 +54,15 @@ pub async fn progress_inner(ctx: Context<'_>) -> Result<(), Error> {
         }
     }
 
-    for (key, value) in map {
-        writeln!(current_string, "<@{}>: {value}", key.get()).unwrap();
+    let mut progress_vec: Vec<_> = map
+        .iter()
+        .filter(|(key, _)| !winners_map.contains(key)) // Exclude users in winners_map
+        .collect();
+
+    progress_vec.sort_by(|(_, a), (_, b)| b.cmp(a));
+
+    for (key, value) in progress_vec {
+        writeln!(current_string, "<@{key}>: {value}").unwrap();
         count += 1;
 
         if count == 10 {

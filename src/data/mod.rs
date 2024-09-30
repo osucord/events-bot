@@ -25,7 +25,6 @@ pub struct EscapeRoom {
     pub start_end_time: HashMap<UserId, (u64, Option<u64>)>,
     // if errors happened when trying to go into the next question.
     // contains a bool to say if its hard failed and no longer retrying.
-    pub reprocessing: HashMap<UserId, bool>,
     #[serde(skip)]
     pub cooldowns: CooldownHandler,
 }
@@ -96,24 +95,6 @@ impl EscapeRoom {
 }
 
 impl Data {
-    pub fn overwrite_err(&self, user_id: UserId, set_and_retrying: Option<bool>) {
-        let mut room = self.escape_room.write();
-
-        let Some(retrying) = set_and_retrying else {
-            room.reprocessing.remove(&user_id);
-            room.write_questions().unwrap();
-            return;
-        };
-        room.reprocessing.insert(user_id, retrying);
-
-        room.write_questions().unwrap();
-    }
-
-    pub fn overwrite_err_check(&self, user_id: UserId) -> Option<bool> {
-        let room = self.escape_room.read();
-        room.reprocessing.get(&user_id).copied()
-    }
-
     pub fn user_next_question(&self, user_id: UserId) -> usize {
         let mut room = self.escape_room.write();
         let progress = room.user_progress.entry(user_id).or_insert(1);
@@ -163,15 +144,7 @@ impl Data {
             Ok(config) => {
                 let mut escape_room = self.escape_room.write();
 
-                escape_room.winners = config.winners;
-                escape_room.guild = config.guild;
-                escape_room.active = config.active;
-                escape_room.questions = config.questions;
-                escape_room.user_progress = config.user_progress;
-                escape_room.reprocessing = config.reprocessing;
-                escape_room.error_channel = config.error_channel;
-                escape_room.analytics_channel = config.analytics_channel;
-                escape_room.start_end_time = config.start_end_time;
+                *escape_room = config;
             }
             Err(_) => {
                 return Err("Cannot read escape room configuration!".into());
