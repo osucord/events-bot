@@ -1,6 +1,9 @@
 use aformat::{aformat, ToArrayString};
 use std::fmt::Write;
 
+/* mod average;
+mod timed; */
+
 use crate::{Context, Error};
 use poise::{
     serenity_prelude::{

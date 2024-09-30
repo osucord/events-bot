@@ -1,11 +1,21 @@
 mod setup;
+mod setup_channel_manual;
 mod utils;
 
-use crate::{Context, Error};
-use serenity::all::{EditMember, Member};
+use std::collections::HashMap;
 
-pub fn commands() -> [crate::Command; 3] {
-    [setup::setup(), setup::activate(), set_question()]
+use crate::{Context, Error};
+use serenity::all::{EditMember, Member, User};
+
+pub fn commands() -> [crate::Command; 6] {
+    [
+        setup::setup(),
+        setup_channel_manual::send_question(),
+        setup::activate(),
+        set_question(),
+        clear_cooldown(),
+        clear_all_cooldowns(),
+    ]
 }
 
 /// Sets the current question of the user.
@@ -89,6 +99,63 @@ pub async fn set_question(
         .edit(ctx.http(), EditMember::new().roles(member_roles))
         .await?;
 
+    ctx.say("Done!").await?;
+
+    Ok(())
+}
+
+#[allow(clippy::cast_possible_truncation)]
+/// Removes the cooldown for a user.
+#[poise::command(
+    rename = "clear-cooldown",
+    prefix_command,
+    slash_command,
+    owners_only,
+    guild_only
+)]
+pub async fn clear_cooldown(
+    ctx: Context<'_>,
+    #[description = "The user you are removing the cooldown for."] user: User,
+) -> Result<(), Error> {
+    {
+        let data = ctx.data();
+        let mut room = data.escape_room.write();
+        let cooldowns = &mut room.cooldowns;
+
+        // Collect the entries to remove into a separate vector
+        let mut to_remove = Vec::new();
+        for (i, ((cooldown_user, _), _)) in cooldowns.wrong_answer.iter().enumerate() {
+            if *cooldown_user == user.id {
+                to_remove.push((user.id, i as u16));
+            }
+        }
+
+        // Remove the collected entries
+        for item in to_remove {
+            cooldowns.wrong_answer.remove(&item);
+        }
+    }
+    ctx.say("Done!").await?;
+
+    Ok(())
+}
+
+#[allow(clippy::cast_possible_truncation)]
+/// Removes all cooldowns.
+#[poise::command(
+    rename = "clear-all-cooldowns",
+    prefix_command,
+    slash_command,
+    owners_only,
+    guild_only
+)]
+pub async fn clear_all_cooldowns(ctx: Context<'_>) -> Result<(), Error> {
+    {
+        let data = ctx.data();
+        let mut room = data.escape_room.write();
+        let cooldowns = &mut room.cooldowns;
+        cooldowns.wrong_answer = HashMap::new();
+    }
     ctx.say("Done!").await?;
 
     Ok(())

@@ -6,9 +6,9 @@ use crate::commands::escape_room::utils::activate::unlock_first_channel;
 use crate::data::Question;
 use crate::{Context, Data, Error};
 use poise::serenity_prelude::{
-    self as serenity, ChannelId, ChannelType, Colour, CreateActionRow, CreateAttachment,
-    CreateEmbed, CreateMessage, GuildChannel, GuildId, PermissionOverwrite,
-    PermissionOverwriteType, Permissions, RoleId, UserId,
+    self as serenity, ChannelId, ChannelType, CreateAttachment, CreateButton, CreateMessage,
+    GuildChannel, GuildId, PermissionOverwrite, PermissionOverwriteType, Permissions, RoleId,
+    UserId,
 };
 
 /// Start the escape room!
@@ -231,46 +231,7 @@ async fn setup_channels(
         question.custom_id = Some(custom_id);
         question.channel = Some(channel.id);
 
-        let components = vec![CreateActionRow::Buttons(vec![serenity::CreateButton::new(
-            custom_id.as_str(),
-        )
-        .label("Submit Answer")])];
-
-        let mut embed = CreateEmbed::new()
-            .title(format!("Question #{index}"))
-            .description(&question.content)
-            .colour(Colour::BLUE);
-
-        if let Some(url) = &question.image_path {
-            // shouldn't really unwrap here but w/e, needs an entire rewrite anyway.
-            let name = url.strip_prefix("files/").unwrap();
-            embed = embed.attachment(name);
-        }
-
-        let mut builder = CreateMessage::new().embed(embed).components(components);
-
-        if let Some(url) = &question.image_path {
-            let attachment = CreateAttachment::path(url).await;
-            if let Ok(attachment) = attachment {
-                builder = builder.add_file(attachment);
-            } else {
-                println!("Could not set image for question {index}");
-            }
-        }
-
-        channel.send_message(ctx, builder).await?;
-
-        // This is its own message to avoid the embed being below the attachment.
-        if let Some(url) = &question.attachment_path {
-            let attachment = CreateAttachment::path(url).await;
-            if let Ok(attachment) = attachment {
-                channel
-                    .send_message(ctx, CreateMessage::new().add_file(attachment))
-                    .await?;
-            } else {
-                println!("Could not set attachment for question {index}");
-            }
-        }
+        send_messages(ctx, channel.id, question, index).await?;
 
         index += 1;
         pos += 1;
@@ -416,4 +377,82 @@ fn get_first_question_overrides(
     ]);
 
     role_overwrites
+}
+
+pub async fn send_messages_core(
+    ctx: Context<'_>,
+    channel_id: ChannelId,
+    question: &Question,
+    question_number: u16,
+) -> Result<(), Error> {
+    let mut embed = serenity::all::CreateEmbed::new()
+        .title(format!("Question #{question_number}"))
+        .description(question.content.clone())
+        .colour(serenity::all::Colour::BLUE);
+
+    if let Some(url) = &question.image_path {
+        // shouldn't really unwrap here but w/e, needs an entire rewrite anyway.
+        let name = url.strip_prefix("files/").unwrap();
+        embed = embed.attachment(name);
+    }
+
+    let mut builder = CreateMessage::new().embed(embed);
+
+    if let Some(url) = &question.image_path {
+        let attachment = CreateAttachment::path(url).await;
+        if let Ok(attachment) = attachment {
+            builder = builder.add_file(attachment);
+        } else {
+            return Err(format!("Could not set image for question {question_number}").into());
+        }
+    }
+
+    if let Some(custom_id) = question.custom_id {
+        let components = vec![serenity::all::CreateActionRow::Buttons(vec![
+            CreateButton::new(custom_id.as_str()).label("Submit Answer"),
+        ])];
+
+        builder = builder.components(components);
+        channel_id.send_message(ctx.http(), builder).await?;
+    } else {
+        channel_id.send_message(ctx.http(), builder).await?;
+    };
+
+    if let Some(url) = &question.attachment_path {
+        let attachment = CreateAttachment::path(url).await;
+        if let Ok(attachment) = attachment {
+            channel_id
+                .send_message(ctx.http(), CreateMessage::new().add_file(attachment))
+                .await?;
+        } else {
+            return Err(format!("Could not set attachment for question {question_number}").into());
+        }
+    };
+    Ok(())
+}
+
+pub async fn send_messages(
+    ctx: Context<'_>,
+    channel_id: ChannelId,
+    question: &Question,
+    question_number: u16,
+) -> Result<(), Error> {
+    if question.custom_id.is_none() {
+        return Err("No Custom ID".into());
+    }
+
+    send_messages_core(ctx, channel_id, question, question_number).await?;
+
+    Ok(())
+}
+
+pub async fn maybe_send_messages(
+    ctx: Context<'_>,
+    channel_id: ChannelId,
+    question: &Question,
+    question_number: u16,
+) -> Result<(), Error> {
+    send_messages_core(ctx, channel_id, question, question_number).await?;
+
+    Ok(())
 }

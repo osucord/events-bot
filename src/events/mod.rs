@@ -63,6 +63,7 @@ async fn handle_component(
     };
 
     let mut send_dumb_error = false;
+    // doesn't respond.
     if index == 0 {
         // why try_insert unstable?
         {
@@ -102,13 +103,19 @@ async fn handle_component(
     }
 
     // uh oh.
+
     if let Some(right_question) = right_question {
+        println!("Wrong question was answered by {}", press.user.id);
         // they are attempting the first question, this should only happen if they left
         // and rejoined (or if the bot failed to move them from the first question).
         // TODO: at some point in the next 1000 years make a proper case that restores them
         // though, there should be no reason that I'd have to because this is stupid to begin with.
         // Why leave, rejoin then attempt to play the same event you tried originally?
         if index == 0 {
+            println!(
+                "{} assumed to have left and rejoined, attempting the event again.",
+                press.user.id
+            );
             {
                 data.escape_room
                     .write()
@@ -140,27 +147,36 @@ async fn handle_component(
         return Err("A channel was not found for question yet an answer has been recieved.".into());
     };
 
-    // I don't think its possible to do in a different channel but might as well block it.
+    // user used it through the send-question command's output in the wrong channel.
     if press.channel_id != q_channel {
         return Ok(());
     }
 
     if let Some(cooldown) = check_cooldown(&data, press.user.id, index) {
         press
-            .create_followup(
+            .create_response(
                 &framework.serenity_context.http,
-                CreateInteractionResponseFollowup::new()
-                    .ephemeral(true)
-                    .content(format!(
-                        "You are answering too fast! Please wait {} seconds before trying again!",
-                        format_duration_readable(cooldown)
-                    )),
+                CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new()
+                        .ephemeral(true)
+                        .content(format!(
+                            "You are answering too fast! Please wait {} seconds before trying \
+                             again!",
+                            format_duration_readable(cooldown)
+                        )),
+                ),
             )
             .await?;
+        return Ok(());
     }
 
     // open modal, take response, check it against the answers, done.
     let answers = get_answer(framework.serenity_context, press.clone(), question.clone()).await;
+    println!(
+        "{} on question {} answered: {answers:?}",
+        press.user.id,
+        index + 1
+    );
 
     let Ok(answers) = answers else { return Ok(()) };
 
@@ -238,8 +254,8 @@ fn checks(
     data: &Arc<Data>,
     press: &ComponentInteraction,
 ) -> Result<(Question, Option<ChannelId>, Option<usize>, u16, u16), ()> {
-    let mut room = data.escape_room.write();
-    let expected_question = *room.user_progress.entry(press.user.id).or_insert(1);
+    let room = data.escape_room.write();
+    let expected_question = room.user_progress.get(&press.user.id);
 
     // If its not active, don't allow interactions to run.
     if !room.active {
@@ -260,11 +276,10 @@ fn checks(
     let log_channel = room.analytics_channel;
     // If the user is on the wrong question they either have Administrator or have a permission
     // override they shouldn't have, or something else has gone wrong.
-    let right_question = if index + 1 == expected_question {
-        None
-    } else {
-        Some(expected_question)
-    };
+
+    let right_question = expected_question
+        .copied()
+        .filter(|&expected_question| index + 1 != expected_question);
 
     room.write_questions().unwrap();
 

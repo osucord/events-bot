@@ -61,6 +61,67 @@ pub struct Question {
     pub role_id: Option<RoleId>,
 }
 
+impl Question {
+    pub async fn as_msgs(
+        &self,
+        question_number: u16,
+    ) -> Result<
+        (
+            serenity::all::CreateMessage,
+            Option<serenity::all::CreateMessage>,
+        ),
+        Error,
+    > {
+        let Some(custom_id) = self.custom_id else {
+            return Err("No custom ID.".into());
+        };
+
+        let components = vec![serenity::all::CreateActionRow::Buttons(vec![
+            // i don't want to trun it into a string here, i just want lifetimes to be okay right now.
+            serenity::all::CreateButton::new(custom_id.to_string()).label("Submit Answer"),
+        ])];
+
+        let mut embed = serenity::all::CreateEmbed::new()
+            .title(format!("Question #{question_number}"))
+            .description(&self.content)
+            .colour(serenity::all::Colour::BLUE);
+
+        if let Some(url) = &self.image_path {
+            // shouldn't really unwrap here but w/e, needs an entire rewrite anyway.
+            let name = url.strip_prefix("files/").unwrap();
+            embed = embed.attachment(name);
+        }
+
+        let mut builder = serenity::all::CreateMessage::new()
+            .embed(embed)
+            .components(components);
+
+        if let Some(url) = &self.image_path {
+            let attachment = serenity::all::CreateAttachment::path(url).await;
+            if let Ok(attachment) = attachment {
+                builder = builder.add_file(attachment);
+            } else {
+                return Err(format!("Could not set image for question {question_number}").into());
+            }
+        }
+
+        let alt_builder = if let Some(url) = &self.attachment_path {
+            let attachment = serenity::all::CreateAttachment::path(url).await;
+            if let Ok(attachment) = attachment {
+                Some(serenity::all::CreateMessage::new().add_file(attachment))
+            } else {
+                return Err(
+                    format!("Could not set attachment for question {question_number}").into(),
+                );
+            }
+        } else {
+            None
+        };
+
+        Ok((builder, alt_builder))
+    }
+}
+
 /// A part of a question containing its own answers and content.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct QuestionPart {

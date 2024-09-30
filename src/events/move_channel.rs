@@ -34,6 +34,7 @@ pub async fn move_to_next_channel(
     };
 
     let Some(next_question) = next_question else {
+        println!("{} won.", press.user.id);
         win(framework, press, remove_role).await?;
         return Ok(());
     };
@@ -157,6 +158,7 @@ async fn handle_overwrite(
     add_role: RoleId,
 ) -> Result<(), Error> {
     let http = &framework.serenity_context.http;
+    println!("Staging addition of {add_role} for {user_id}.");
     if http
         .add_member_role(
             guild_id,
@@ -171,6 +173,7 @@ async fn handle_overwrite(
     }
 
     if let Some(remove_role) = remove_role {
+        println!("Staging removal of {remove_role} for {user_id}.");
         if http
             .remove_member_role(
                 guild_id,
