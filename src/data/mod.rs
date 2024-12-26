@@ -60,68 +60,6 @@ pub struct Question {
     /// Is None when not set up or if first question.
     pub role_id: Option<RoleId>,
 }
-
-impl Question {
-    pub async fn as_msgs(
-        &self,
-        question_number: u16,
-    ) -> Result<
-        (
-            serenity::all::CreateMessage,
-            Option<serenity::all::CreateMessage>,
-        ),
-        Error,
-    > {
-        let Some(custom_id) = self.custom_id else {
-            return Err("No custom ID.".into());
-        };
-
-        let components = vec![serenity::all::CreateActionRow::Buttons(vec![
-            // i don't want to trun it into a string here, i just want lifetimes to be okay right now.
-            serenity::all::CreateButton::new(custom_id.to_string()).label("Submit Answer"),
-        ])];
-
-        let mut embed = serenity::all::CreateEmbed::new()
-            .title(format!("Question #{question_number}"))
-            .description(&self.content)
-            .colour(serenity::all::Colour::BLUE);
-
-        if let Some(url) = &self.image_path {
-            // shouldn't really unwrap here but w/e, needs an entire rewrite anyway.
-            let name = url.strip_prefix("files/").unwrap();
-            embed = embed.attachment(name);
-        }
-
-        let mut builder = serenity::all::CreateMessage::new()
-            .embed(embed)
-            .components(components);
-
-        if let Some(url) = &self.image_path {
-            let attachment = serenity::all::CreateAttachment::path(url).await;
-            if let Ok(attachment) = attachment {
-                builder = builder.add_file(attachment);
-            } else {
-                return Err(format!("Could not set image for question {question_number}").into());
-            }
-        }
-
-        let alt_builder = if let Some(url) = &self.attachment_path {
-            let attachment = serenity::all::CreateAttachment::path(url).await;
-            if let Ok(attachment) = attachment {
-                Some(serenity::all::CreateMessage::new().add_file(attachment))
-            } else {
-                return Err(
-                    format!("Could not set attachment for question {question_number}").into(),
-                );
-            }
-        } else {
-            None
-        };
-
-        Ok((builder, alt_builder))
-    }
-}
-
 /// A part of a question containing its own answers and content.
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct QuestionPart {
@@ -173,7 +111,7 @@ impl Data {
     pub fn load_questions(&self) -> Result<(), Error> {
         let questions_file = std::fs::read_to_string("escape_room.json");
         match questions_file {
-            Ok(questions) => self._load_questions(&questions)?,
+            Ok(questions) => self.load_questions_(&questions)?,
             Err(error) => match error.kind() {
                 std::io::ErrorKind::NotFound => {
                     create_file()?;
@@ -200,7 +138,7 @@ impl Data {
         old
     }
 
-    fn _load_questions(&self, questions: &str) -> Result<(), Error> {
+    fn load_questions_(&self, questions: &str) -> Result<(), Error> {
         match serde_json::from_str::<EscapeRoom>(questions) {
             Ok(config) => {
                 let mut escape_room = self.escape_room.write();

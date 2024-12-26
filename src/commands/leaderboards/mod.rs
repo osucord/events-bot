@@ -1,5 +1,5 @@
 use aformat::{aformat, ToArrayString};
-use std::fmt::Write;
+use std::{borrow::Cow, fmt::Write};
 
 /* mod average;
 mod timed; */
@@ -94,10 +94,10 @@ pub async fn progress_inner(ctx: Context<'_>) -> Result<(), Error> {
     let previous_id = aformat!("{ctx_id}previous");
     let next_id = aformat!("{ctx_id}next");
 
-    let components = [CreateActionRow::Buttons(vec![
+    let components = [CreateActionRow::Buttons(Cow::Owned(vec![
         CreateButton::new(previous_id.as_str()).emoji('◀'),
         CreateButton::new(next_id.as_str()).emoji('▶'),
-    ])];
+    ]))];
 
     let builder = builder.components(&components);
 

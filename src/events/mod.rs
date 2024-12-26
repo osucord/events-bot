@@ -18,7 +18,7 @@ mod cooldown;
 mod log;
 mod move_channel;
 mod rejoin;
-use ::serenity::all::CreateMessage;
+use ::serenity::all::{CreateMessage, QuickModal};
 use aformat::aformat;
 use log::log;
 use small_fixed_array::{FixedArray, FixedString};

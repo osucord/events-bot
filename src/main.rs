@@ -40,7 +40,7 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 
 #[tokio::main]
 async fn main() {
-    let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let token = serenity::Token::from_env("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
     let intents = serenity::GatewayIntents::all();
 
     let options = poise::FrameworkOptions {
@@ -66,7 +66,7 @@ async fn main() {
 
     let framework = poise::Framework::new(options);
 
-    let client = serenity::ClientBuilder::new(&token, intents)
+    let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .data(Arc::new(data))
         .await;

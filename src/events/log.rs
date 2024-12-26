@@ -26,7 +26,7 @@ pub async fn log(
     if let Some(channel) = log_channel {
         let _ = tokio::join!(
             create_or_push_line(&log_msg),
-            channel.send_message(ctx, CreateMessage::new().embed(msg.to_embed(user)))
+            channel.send_message(&ctx.http, CreateMessage::new().embed(msg.to_embed(user)))
         );
     } else {
         let _ = create_or_push_line(&log_msg).await;

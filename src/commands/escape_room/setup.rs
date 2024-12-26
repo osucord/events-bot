@@ -1,4 +1,5 @@
 use aformat::aformat;
+use std::borrow::Cow;
 use std::{fmt::Write, sync::Arc};
 
 use crate::commands::checks::not_active;
@@ -85,7 +86,7 @@ pub async fn setup(
             return Ok(());
         };
 
-        let member_perms = guild.member_permissions(&member);
+        let member_perms = member_permissions(&guild, &member);
 
         (
             guild.user_permissions_in(&category, &member),
@@ -223,7 +224,7 @@ async fn setup_channels(
             builder = builder.permissions(&perms);
         }
 
-        let channel = guild_id.create_channel(ctx, builder).await?;
+        let channel = guild_id.create_channel(ctx.http(), builder).await?;
 
         let custom_id = aformat!("{ctx_id}_{}", index - 1);
 
@@ -244,7 +245,7 @@ async fn setup_channels(
         .category(category_id)
         .position(pos);
 
-    let channel = guild_id.create_channel(ctx, builder).await?;
+    let channel = guild_id.create_channel(ctx.http(), builder).await?;
 
     {
         let data = ctx.data();
@@ -408,9 +409,9 @@ pub async fn send_messages_core(
     }
 
     if let Some(custom_id) = question.custom_id {
-        let components = vec![serenity::all::CreateActionRow::Buttons(vec![
+        let components = vec![serenity::all::CreateActionRow::Buttons(Cow::Owned(vec![
             CreateButton::new(custom_id.as_str()).label("Submit Answer"),
-        ])];
+        ]))];
 
         builder = builder.components(components);
         channel_id.send_message(ctx.http(), builder).await?;
@@ -455,4 +456,29 @@ pub async fn maybe_send_messages(
     send_messages_core(ctx, channel_id, question, question_number).await?;
 
     Ok(())
+}
+
+// waiting for a less footgun like name before this can be in serenity again.
+fn member_permissions(guild: &serenity::Guild, member: &serenity::Member) -> Permissions {
+    if member.user.id == guild.owner_id {
+        return Permissions::all();
+    }
+
+    let mut permissions = if let Some(role) = guild.roles.get(&RoleId::new(guild.id.get())) {
+        role.permissions
+    } else {
+        Permissions::empty()
+    };
+
+    for role_id in &member.roles {
+        if let Some(role) = guild.roles.get(role_id) {
+            permissions |= role.permissions;
+        }
+    }
+
+    if permissions.contains(Permissions::ADMINISTRATOR) {
+        return Permissions::all();
+    };
+
+    permissions
 }

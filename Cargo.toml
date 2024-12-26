@@ -27,10 +27,6 @@ default-features = false
 branch = "next"
 
 [dependencies.poise]
-git = "https://github.com/serenity-rs/poise"
+git = "https://github.com/jamesbt365/poise"
 features = ["cache"]
-branch = "serenity-next"
-
-[patch."https://github.com/serenity-rs/serenity".serenity]
-git = "https://github.com/jamesbt365/serenity"
-branch = "invalid-permissions-half-fix"
+branch = "fix-compile-serenity-next"
