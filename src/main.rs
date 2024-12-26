@@ -40,9 +40,9 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 
 #[tokio::main]
 async fn main() {
+    let _ = dotenvy::dotenv();
     let token = serenity::Token::from_env("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
     let intents = serenity::GatewayIntents::all();
-    let _ = dotenvy::dotenv();
 
     let options = poise::FrameworkOptions {
         commands: commands::commands(),
