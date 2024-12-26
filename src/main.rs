@@ -42,11 +42,17 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 async fn main() {
     let token = serenity::Token::from_env("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
     let intents = serenity::GatewayIntents::all();
+    let _ = dotenvy::dotenv();
 
     let options = poise::FrameworkOptions {
         commands: commands::commands(),
         prefix_options: poise::PrefixFrameworkOptions {
-            prefix: Some("sex!".into()),
+            prefix: Some("events!".into()),
+            additional_prefixes: vec![
+                poise::Prefix::Literal("event!"),
+                poise::Prefix::Literal("e!"),
+                poise::Prefix::Literal("e"),
+            ],
             edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
                 Duration::from_secs(300),
             ))),

@@ -1,3 +1,4 @@
+mod badges;
 mod checks;
 mod escape_room;
 mod leaderboards;
@@ -8,5 +9,6 @@ pub fn commands() -> Vec<crate::Command> {
         .into_iter()
         .chain(meta::commands())
         .chain(leaderboards::commands())
+        .chain(badges::commands())
         .collect()
 }
