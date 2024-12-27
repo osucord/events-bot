@@ -69,6 +69,22 @@ impl EventBadges {
         Ok(self.events.read())
     }
 
+    pub async fn add_event(&self, name: String, badges: Vec<(bool, String, u64)>)
+    /* -> Result<parking_lot::lock_api::RwLockReadGuard<'_, parking_lot::RawRwLock, Vec<Event>>, Error> */
+    {
+        /*         self.populate().await?; */
+
+        //query!("{}")
+
+        let event = Event {
+            id: 32,
+            name,
+            badges,
+        };
+
+        self.events.write().push(event);
+    }
+
     /// Populates the caches, if Err(true), it was an error from the database, if false it was already being setup.
     async fn populate_cache(&self) -> Result<(), bool> {
         if self.being_setup.load(Ordering::SeqCst) {

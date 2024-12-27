@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use crate::commands::checks::has_event_committee;
@@ -159,7 +160,7 @@ fn generate_embed(
     embed
 }
 
-static BADGE_STRIPPER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d+_\d+_").unwrap());
+static BADGE_STRIPPER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\d+)_(\d+)_").unwrap());
 
 fn badge_name_to_readable(string: &str) -> String {
     let output = BADGE_STRIPPER.replace(string, "");
@@ -179,6 +180,62 @@ pub async fn invalidate_badge_cache(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn commands() -> [crate::Command; 3] {
-    [badges(), all_badges(), invalidate_badge_cache()]
+fn extract_badge_numbers(string: &str) -> Option<(u32, u32)> {
+    // Use the regex to capture the numbers.
+    BADGE_STRIPPER.captures(string).and_then(|caps| {
+        let first = caps.get(1)?.as_str().parse::<u32>().ok()?;
+        let second = caps.get(2)?.as_str().parse::<u32>().ok()?;
+        Some((first, second))
+    })
+}
+
+#[poise::command(rename = "import", prefix_command, guild_only, owners_only)]
+pub async fn import(ctx: Context<'_>, mistake: bool) -> Result<(), Error> {
+    // eventually check if the events aren't empty, but this is a command that will be reworked anyway.
+    // gotta account for all sorts when i make safe versions, like a command to change the indexes of the badge.
+    if mistake {
+        ctx.say("Okay I'm not gonna do it").await?;
+        return Ok(());
+    }
+
+    let emojis = ctx.serenity_context().get_application_emojis().await?;
+
+    let mut map: HashMap<u32, Vec<(u32, &serenity::model::prelude::Emoji)>> = HashMap::new();
+    for (iterator_index, emoji) in emojis.iter().enumerate() {
+        let Some((event_num, index)) = extract_badge_numbers(&emoji.name) else {
+            continue;
+        };
+
+        if let Some(val) = map.get_mut(&event_num) {
+            val.push((index, emoji));
+        } else {
+            map.insert(event_num, vec![(index, &emojis[iterator_index])]);
+        }
+    }
+
+    for (_, vec) in map {
+        // Sort the vec by index
+        let mut sorted_vec = vec.clone();
+        sorted_vec.sort_by_key(|(index, _)| *index);
+
+        // Form a new vector with emoji properties
+        let ordered_vector: Vec<(bool, String, u64)> = sorted_vec
+            .iter()
+            .map(|(_, emoji)| (emoji.animated(), emoji.name.to_string(), emoji.id.get()))
+            .collect();
+
+        ctx.data()
+            .badges
+            .add_event(
+                "Placeholder because I haven't got that far".to_string(),
+                ordered_vector,
+            )
+            .await;
+    }
+
+    Ok(())
+}
+
+pub fn commands() -> [crate::Command; 4] {
+    [badges(), all_badges(), invalidate_badge_cache(), import()]
 }
