@@ -6,6 +6,7 @@ CREATE TABLE events (
 CREATE TABLE badges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id INTEGER NOT NULL,
+    friendly_name TEXT NOT NULL,
 
     animated BOOLEAN NOT NULL,
     emoji_name TEXT NOT NULL,

@@ -1,13 +1,20 @@
-#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
 
 use crate::Error;
 use aformat::ArrayString;
 use parking_lot::RwLock;
 use poise::serenity_prelude::{ChannelId, GuildId, RoleId, UserId};
+use rand::Rng;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serenity::all::CreateAttachment;
 use serialize::regex_patterns;
 use sqlx::{query, SqlitePool};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -69,20 +76,112 @@ impl EventBadges {
         Ok(self.events.read())
     }
 
-    pub async fn add_event(&self, name: String, badges: Vec<(bool, String, u64)>)
-    /* -> Result<parking_lot::lock_api::RwLockReadGuard<'_, parking_lot::RawRwLock, Vec<Event>>, Error> */
-    {
-        /*         self.populate().await?; */
+    pub async fn new_event(
+        &self,
+        ctx: &serenity::all::Context,
+        name: String,
+        badge_names: Vec<String>,
+        attachments: Vec<Vec<u8>>,
+    ) -> Result<(), Error> {
+        let mut placeholder_emote = None;
 
-        //query!("{}")
+        if name.len() > 120 {
+            return Err("Are you sure you want a name that long? it'll be hard to read.".into());
+        }
 
-        let event = Event {
-            id: 32,
+        if badge_names
+            .iter()
+            .any(|n| n.len() > 27 /* 4 digits and an underscore is 32 */)
+        {
+            return Err("One or more of your badge names will be too long!".into());
+        }
+
+        if attachments.len() > badge_names.len() {
+            return Err("You have more attachments than names for them!".into());
+        }
+
+        if badge_names.len() != attachments.len() {
+            let emojis = ctx.http.get_application_emojis().await?;
+            let Some(placeholder) = emojis.iter().find(|e| e.name == "placeholder") else {
+                return Err(
+                    "Not enough badges attachments were provided and no placeholder exists!".into(),
+                );
+            };
+
+            placeholder_emote = Some(placeholder.clone());
+        }
+
+        let mut completed_badges = vec![];
+
+        let mut attachment_iter = attachments.into_iter();
+        for badge_name in badge_names {
+            let attachment = attachment_iter.next().unwrap_or_default();
+            let emoji = if attachment.is_empty() {
+                // Fallback to the placeholder emote if the attachment is empty
+                Cow::Borrowed(&placeholder_emote)
+            } else {
+                let rand = {
+                    let mut rng = rand::thread_rng();
+                    rng.gen_range(1000..10000)
+                };
+
+                let new_emoji = ctx
+                    .create_application_emoji(
+                        &format!("{rand}_{badge_name}"),
+                        &CreateAttachment::bytes(attachment, "a").to_base64(),
+                    )
+                    .await?;
+                Cow::Owned(Some(new_emoji))
+            };
+
+            // i refactored and i'm not sure if this is even unreachable anymore.
+            // but i'm always gonna run it with the placeholder and i'm not gonna like... check? lol
+            let Some(ref emoji) = *emoji else {
+                return Err("There's no badge?".into());
+            };
+
+            completed_badges.push(Badge {
+                name: badge_name,
+                animated: emoji.animated(),
+                discord_name: emoji.name.to_string(),
+                discord_id: emoji.id.get(),
+            });
+        }
+
+        let mut transaction = self.db.begin().await?;
+
+        let event_id = query!("INSERT INTO events (event_name) VALUES (?)", name)
+            .execute(&mut *transaction)
+            .await?
+            .last_insert_rowid();
+
+        for (index, badge) in completed_badges.iter().enumerate() {
+            let discord_id = badge.discord_id as i64;
+            let index = (index + 1) as i64;
+            sqlx::query!(
+                    r#"
+                    INSERT INTO badges (event_id, friendly_name, animated, emoji_name, emoji_id, badge_index)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    "#,
+                    event_id,
+                    badge.name,
+                    badge.animated,
+                    badge.discord_name,
+                    discord_id,
+                    index
+                )
+                .execute( &mut *transaction)
+                .await?;
+        }
+
+        transaction.commit().await?;
+        self.events.write().push(Event {
+            id: event_id as u16,
             name,
-            badges,
-        };
+            badges: completed_badges,
+        });
 
-        self.events.write().push(event);
+        Ok(())
     }
 
     /// Populates the caches, if Err(true), it was an error from the database, if false it was already being setup.
@@ -104,7 +203,8 @@ impl EventBadges {
             .collect::<Vec<_>>();
 
         let badges = query!(
-            "SELECT event_id, emoji_id, emoji_name, animated FROM badges ORDER BY badge_index"
+            "SELECT event_id, emoji_id, emoji_name, animated, friendly_name FROM badges ORDER BY \
+             badge_index"
         )
         .fetch_all(&self.db)
         .await
@@ -112,9 +212,14 @@ impl EventBadges {
 
         for badge in badges {
             if let Some(event) = events.iter_mut().find(|e| e.id == badge.event_id as u16) {
-                event
-                    .badges
-                    .push((badge.animated, badge.emoji_name, badge.event_id as u64));
+                let badge = Badge {
+                    name: badge.friendly_name,
+                    animated: badge.animated,
+                    discord_name: badge.emoji_name,
+                    discord_id: badge.emoji_id as u64,
+                };
+
+                event.badges.push(badge);
             }
         }
 
@@ -135,7 +240,14 @@ pub struct Event {
     /// Event's id, autoincrementing from database starting at 1.
     pub id: u16,
     pub name: String,
-    pub badges: Vec<(bool, String, u64)>,
+    pub badges: Vec<Badge>,
+}
+
+pub struct Badge {
+    pub name: String,
+    pub animated: bool,
+    pub discord_name: String,
+    pub discord_id: u64,
 }
 
 impl Eq for Event {}
