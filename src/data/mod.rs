@@ -87,7 +87,7 @@ impl EventBadges {
 
     /// Populates the caches, if Err(true), it was an error from the database, if false it was already being setup.
     async fn populate_cache(&self) -> Result<(), bool> {
-        if self.being_setup.load(Ordering::SeqCst) {
+        if self.being_setup.swap(true, Ordering::SeqCst) {
             return Err(false);
         }
 
@@ -119,7 +119,7 @@ impl EventBadges {
         }
 
         self.setup.store(true, Ordering::SeqCst);
-        self.being_setup.store(true, Ordering::SeqCst);
+        self.being_setup.store(false, Ordering::SeqCst);
 
         Ok(())
     }

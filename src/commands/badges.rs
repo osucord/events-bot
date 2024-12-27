@@ -45,7 +45,7 @@ pub async fn all_badges(ctx: Context<'_>) -> Result<(), Error> {
                         writeln!(string, "{}: <a:{name}:{id}>", badge_name_to_readable(name))
                             .unwrap();
                     } else {
-                        writeln!(string, "{}: <{name}:{id}>", badge_name_to_readable(name))
+                        writeln!(string, "{}: <:{name}:{id}>", badge_name_to_readable(name))
                             .unwrap();
                     }
                 }
@@ -232,6 +232,8 @@ pub async fn import(ctx: Context<'_>, mistake: bool) -> Result<(), Error> {
             )
             .await;
     }
+
+    ctx.say("done!").await?;
 
     Ok(())
 }
