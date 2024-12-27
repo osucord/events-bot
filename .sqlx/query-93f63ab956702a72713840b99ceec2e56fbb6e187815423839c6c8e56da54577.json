@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT event_id, emoji_id, emoji_name, animated, friendly_name FROM badges ORDER BY badge_index",
+  "describe": {
+    "columns": [
+      {
+        "name": "event_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "emoji_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "emoji_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "animated",
+        "ordinal": 3,
+        "type_info": "Bool"
+      },
+      {
+        "name": "friendly_name",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "93f63ab956702a72713840b99ceec2e56fbb6e187815423839c6c8e56da54577"
+}

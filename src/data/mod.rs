@@ -101,7 +101,8 @@ impl EventBadges {
         }
 
         if badge_names.len() != attachments.len() {
-            let emojis = ctx.http.get_application_emojis().await?;
+            let emojis: Vec<serenity::model::prelude::Emoji> =
+                ctx.http.get_application_emojis().await?;
             let Some(placeholder) = emojis.iter().find(|e| e.name == "placeholder") else {
                 return Err(
                     "Not enough badges attachments were provided and no placeholder exists!".into(),
@@ -223,6 +224,7 @@ impl EventBadges {
             }
         }
 
+        *self.events.write() = events;
         self.setup.store(true, Ordering::SeqCst);
         self.being_setup.store(false, Ordering::SeqCst);
 
@@ -235,6 +237,8 @@ impl EventBadges {
         self.setup.store(false, Ordering::SeqCst);
     }
 }
+
+#[derive(Debug)]
 pub struct Event {
     // We won't have negative events or more than 255.
     /// Event's id, autoincrementing from database starting at 1.
@@ -243,6 +247,7 @@ pub struct Event {
     pub badges: Vec<Badge>,
 }
 
+#[derive(Debug)]
 pub struct Badge {
     pub name: String,
     pub animated: bool,

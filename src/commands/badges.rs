@@ -6,8 +6,8 @@ use aformat::aformat;
 use aformat::ToArrayString;
 
 use poise::serenity_prelude::{
-    ComponentInteractionCollector, CreateActionRow, CreateButton, CreateEmbed, CreateEmbedFooter,
-    CreateInteractionResponse, CreateInteractionResponseMessage,
+    self as serenity, ComponentInteractionCollector, CreateActionRow, CreateButton, CreateEmbed,
+    CreateEmbedFooter, CreateInteractionResponse, CreateInteractionResponseMessage,
 };
 use poise::CreateReply;
 
@@ -204,11 +204,40 @@ pub async fn add_event(
     Ok(())
 }
 
+#[poise::command(rename = "dbg-cache", prefix_command, guild_only, owners_only)]
+pub async fn dbg_cache(ctx: crate::Context<'_>) -> Result<(), Error> {
+    let dbg = format!("{:?}", ctx.data().badges.get_events().await?);
+
+    let mentions = serenity::CreateAllowedMentions::new()
+        .all_roles(false)
+        .all_users(false)
+        .everyone(false);
+
+    if dbg.len() > 2000 {
+        let attachment = serenity::CreateAttachment::bytes(dbg.into_bytes(), "dbg.txt");
+        ctx.send(
+            poise::CreateReply::new()
+                .attachment(attachment)
+                .allowed_mentions(mentions),
+        )
+        .await?;
+    } else {
+        ctx.send(
+            poise::CreateReply::new()
+                .content(dbg)
+                .allowed_mentions(mentions),
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
 pub fn commands() -> [crate::Command; 4] {
     [
         badges(),
         all_badges(),
         invalidate_badge_cache(),
-        add_event(),
+        dbg_cache(),
     ]
 }
