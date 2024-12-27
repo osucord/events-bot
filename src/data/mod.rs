@@ -1,3 +1,5 @@
+#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
 use crate::Error;
 use aformat::ArrayString;
 use parking_lot::RwLock;
@@ -5,12 +7,126 @@ use poise::serenity_prelude::{ChannelId, GuildId, RoleId, UserId};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serialize::regex_patterns;
+use sqlx::{query, SqlitePool};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 mod serialize;
 
 pub struct Data {
     pub escape_room: RwLock<EscapeRoom>,
+    pub badges: EventBadges,
+    pub db: SqlitePool,
+}
+
+pub struct EventBadges {
+    /// The inner pool to populate the cache and update the database.
+    db: SqlitePool,
+    /// The bool defining if the cache has been primed.
+    setup: AtomicBool,
+    /// If the cache is currently being primed.
+    being_setup: AtomicBool,
+    /// The events cache.
+    events: RwLock<Vec<Event>>,
+    /*     /// The users, with the indexes for the event and badge values.
+    users: DashMap<UserId, Vec<(u16, u8)>>, */
+}
+
+impl EventBadges {
+    pub fn new(pool: &SqlitePool) -> Self {
+        EventBadges {
+            db: pool.clone(),
+            setup: AtomicBool::from(false),
+            being_setup: AtomicBool::from(false),
+            events: RwLock::new(vec![]),
+            /*             users: DashMap::new(), */
+        }
+    }
+
+    pub async fn populate(&self) -> Result<(), Error> {
+        if self.setup.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+
+        match self.populate_cache().await {
+            Ok(()) => Ok(()),
+            Err(val) => {
+                if val {
+                    return Err("An error occurred when populating the cache.".into());
+                }
+                // dirty, i don't like it, i'd rather wait and get notified by other threads, but this is simplier.
+                Err("The cache is currently being populated, please wait.".into())
+            }
+        }
+    }
+
+    pub async fn get_events(
+        &self,
+    ) -> Result<parking_lot::lock_api::RwLockReadGuard<'_, parking_lot::RawRwLock, Vec<Event>>, Error>
+    {
+        self.populate().await?;
+
+        Ok(self.events.read())
+    }
+
+    /// Populates the caches, if Err(true), it was an error from the database, if false it was already being setup.
+    async fn populate_cache(&self) -> Result<(), bool> {
+        if self.being_setup.load(Ordering::SeqCst) {
+            return Err(false);
+        }
+
+        let mut events = query!("SELECT id, event_name FROM events")
+            .fetch_all(&self.db)
+            .await
+            .map_err(|_| true)?
+            .into_iter()
+            .map(|row| Event {
+                id: row.id as u16,
+                name: row.event_name,
+                badges: Vec::new(),
+            })
+            .collect::<Vec<_>>();
+
+        let badges = query!(
+            "SELECT event_id, emoji_id, emoji_name, animated FROM badges ORDER BY badge_index"
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(|_| true)?;
+
+        for badge in badges {
+            if let Some(event) = events.iter_mut().find(|e| e.id == badge.event_id as u16) {
+                event
+                    .badges
+                    .push((badge.animated, badge.emoji_name, badge.event_id as u64));
+            }
+        }
+
+        self.setup.store(true, Ordering::SeqCst);
+        self.being_setup.store(true, Ordering::SeqCst);
+
+        Ok(())
+    }
+
+    pub fn empty_cache(&self) {
+        let mut cache = self.events.write();
+        *cache = vec![];
+        self.setup.store(false, Ordering::SeqCst);
+    }
+}
+pub struct Event {
+    // We won't have negative events or more than 255.
+    /// Event's id, autoincrementing from database starting at 1.
+    pub id: u16,
+    pub name: String,
+    pub badges: Vec<(bool, String, u64)>,
+}
+
+impl Eq for Event {}
+impl PartialEq for Event {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]

@@ -20,6 +20,7 @@ chrono = "0.4.38"
 regex = "1.10.6"
 base64 = "0.22.1"
 dotenvy = "0.15.7"
+sqlx = { version = "0.8", features = [ "sqlite", "runtime-tokio", "tls-native-tls" ] }
 
 [dependencies.serenity]
 git = "https://github.com/serenity-rs/serenity"

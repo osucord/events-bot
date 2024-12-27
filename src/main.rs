@@ -3,13 +3,13 @@
 #![allow(clippy::unreadable_literal)]
 
 use poise::serenity_prelude as serenity;
-use std::{sync::Arc, time::Duration};
+use std::{env, sync::Arc, time::Duration};
 
 mod commands;
 mod data;
 mod events;
 
-use data::{Data, EscapeRoom};
+use data::{Data, EscapeRoom, EventBadges};
 
 use parking_lot::RwLock;
 
@@ -63,9 +63,14 @@ async fn main() {
         ..Default::default()
     };
 
+    let db = database().await;
+
     let data = Data {
         escape_room: RwLock::new(EscapeRoom::default()),
+        badges: EventBadges::new(&db),
+        db,
     };
+
     // load questions.
     data.load_questions()
         .unwrap_or_else(|e| panic!("Cannot load escape room!!: {e}"));
@@ -77,4 +82,17 @@ async fn main() {
         .data(Arc::new(data))
         .await;
     client.unwrap().start().await.unwrap();
+}
+
+async fn database() -> sqlx::SqlitePool {
+    let pool = sqlx::SqlitePool::connect(&env::var("DATABASE_URL").unwrap())
+        .await
+        .unwrap();
+
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("Unable to apply migrations!");
+
+    pool
 }
