@@ -177,15 +177,9 @@ pub async fn add_event(
     badge_names: Vec<String>,
 ) -> Result<(), Error> {
     let attachments = &ctx.msg.attachments;
-    let total_size = attachments.iter().map(|a| a.size).sum::<u32>();
 
-    // should check individual size actually...
-    if total_size >= 5_000_000 {
-        ctx.say(
-            "Why are you trying to upload the Declaration of victory after the Battle of Leipzig \
-             on 18 October 1813?",
-        )
-        .await?;
+    if attachments.iter().any(|a| a.size > 250_000) {
+        ctx.say("The max size for emojis are 250kb each.").await?;
         return Ok(());
     }
 
