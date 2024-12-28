@@ -35,8 +35,6 @@ pub struct EventBadges {
     being_setup: AtomicBool,
     /// The events cache.
     events: RwLock<Vec<Event>>,
-    /*     /// The users, with the indexes for the event and badge values.
-    users: DashMap<UserId, Vec<(u16, u8)>>, */
 }
 
 impl EventBadges {
@@ -46,7 +44,6 @@ impl EventBadges {
             setup: AtomicBool::from(false),
             being_setup: AtomicBool::from(false),
             events: RwLock::new(vec![]),
-            /*             users: DashMap::new(), */
         }
     }
 

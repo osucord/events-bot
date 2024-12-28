@@ -15,6 +15,7 @@ pub async fn not_active(ctx: Context<'_>) -> Result<bool, Error> {
     Ok(true)
 }
 
+#[allow(dead_code)]
 pub async fn has_role(ctx: Context<'_>, check_role: serenity::all::RoleId) -> Result<bool, Error> {
     let has_role = match ctx {
         Context::Prefix(pctx) => {
@@ -46,6 +47,6 @@ pub async fn has_role(ctx: Context<'_>, check_role: serenity::all::RoleId) -> Re
     Ok(true)
 }
 
-pub async fn has_event_committee(ctx: Context<'_>) -> Result<bool, Error> {
+pub async fn _has_event_committee(ctx: Context<'_>) -> Result<bool, Error> {
     has_role(ctx, serenity::all::RoleId::new(1199033047501242439)).await
 }

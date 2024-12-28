@@ -1,4 +1,3 @@
-use crate::commands::checks::has_event_committee;
 use crate::data::Metadata;
 use crate::{Context, Error};
 use std::fmt::Write;
@@ -12,6 +11,7 @@ use poise::serenity_prelude::{
 };
 use poise::CreateReply;
 
+/// View a users badges from all events they have participated in!
 #[poise::command(prefix_command, slash_command, guild_only)]
 pub async fn badges(ctx: Context<'_>, user: Option<User>) -> Result<(), Error> {
     let user = user.as_ref().unwrap_or_else(|| ctx.author());
@@ -89,13 +89,8 @@ pub async fn badges(ctx: Context<'_>, user: Option<User>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(
-    rename = "all-badges",
-    prefix_command,
-    slash_command,
-    guild_only,
-    check = "has_event_committee"
-)]
+/// View all possible badges!
+#[poise::command(rename = "all-badges", prefix_command, slash_command, guild_only)]
 pub async fn all_badges(ctx: Context<'_>) -> Result<(), Error> {
     let mut fields = Vec::new();
     {
@@ -242,12 +237,23 @@ pub async fn invalidate_badge_cache(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(rename = "add-event", prefix_command, guild_only, owners_only)]
+#[poise::command(
+    rename = "add-event",
+    prefix_command,
+    guild_only,
+    owners_only,
+    discard_spare_arguments
+)]
+#[allow(unreachable_code)]
 pub async fn add_event(
     ctx: crate::PrefixContext<'_>,
-    name: String,
-    badge_names: Vec<String>,
+    /*     name: String,
+    badge_names: Vec<String>, */
 ) -> Result<(), Error> {
+    ctx.say("This command is basically useless and needs a rework, so is disabled.")
+        .await?;
+
+    /*
     let attachments = &ctx.msg.attachments;
 
     if attachments.iter().any(|a| a.size > 250_000) {
@@ -266,6 +272,7 @@ pub async fn add_event(
         .await?;
 
     ctx.say("Event added!").await?;
+    */
 
     Ok(())
 }
