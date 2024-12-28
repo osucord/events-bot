@@ -1,4 +1,5 @@
 use crate::commands::checks::has_event_committee;
+use crate::data::Metadata;
 use crate::{Context, Error};
 use std::fmt::Write;
 
@@ -7,14 +8,85 @@ use aformat::ToArrayString;
 
 use poise::serenity_prelude::{
     self as serenity, ComponentInteractionCollector, CreateActionRow, CreateButton, CreateEmbed,
-    CreateEmbedFooter, CreateInteractionResponse, CreateInteractionResponseMessage,
+    CreateEmbedFooter, CreateInteractionResponse, CreateInteractionResponseMessage, User,
 };
 use poise::CreateReply;
 
 #[poise::command(prefix_command, slash_command, guild_only)]
-#[allow(clippy::unused_async)]
-pub async fn badges(_: Context<'_> /* user: Option<UserId> */) -> Result<(), Error> {
-    todo!()
+pub async fn badges(ctx: Context<'_>, user: Option<User>) -> Result<(), Error> {
+    let user = user.as_ref().unwrap_or_else(|| ctx.author());
+
+    let badges = ctx.data().badges.get_user_badges(user.id).await?;
+
+    if badges.is_empty() {
+        ctx.say("This user has no badges!").await?;
+        return Ok(());
+    }
+
+    let total_events = ctx.data().badges.get_total_events().await?;
+
+    let winner_badges = badges
+        .iter()
+        .filter(|b| matches!(b.0.metadata, Metadata::Winner))
+        .collect::<Vec<_>>();
+
+    let participant_badges = badges
+        .iter()
+        .filter(|b| matches!(b.0.metadata, Metadata::Participant))
+        .collect::<Vec<_>>();
+
+    let mut embed = serenity::CreateEmbed::new()
+        .author(serenity::CreateEmbedAuthor::new(user.name.clone()))
+        .color(serenity::Colour::BLUE)
+        .thumbnail(user.face());
+
+    if !winner_badges.is_empty() {
+        let length = winner_badges.len();
+        let mut value = String::new();
+
+        for (badge, name, timestamp) in winner_badges {
+            if let Some(link) = &badge.link {
+                writeln!(
+                    value,
+                    "{} - [{name}]({link}) - <t:{timestamp}:R>",
+                    badge.markdown()
+                )
+                .unwrap();
+            } else {
+                writeln!(value, "{} - {name} - <t:{timestamp}:R>", badge.markdown()).unwrap();
+            }
+        }
+
+        embed = embed.field(format!("Winner - `{length}`"), value, true);
+    }
+
+    if !participant_badges.is_empty() {
+        let length = participant_badges.len();
+        let mut value = String::new();
+
+        for (badge, name, timestamp) in participant_badges {
+            if let Some(link) = &badge.link {
+                writeln!(
+                    value,
+                    "{} - [{name}]({link}) - <t:{timestamp}:R>",
+                    badge.markdown()
+                )
+                .unwrap();
+            } else {
+                writeln!(value, "{} - {name} - <t:{timestamp}:R>", badge.markdown()).unwrap();
+            }
+        }
+
+        embed = embed.field(
+            format!("Participant - `{length}/{total_events}`"),
+            value,
+            true,
+        );
+    }
+
+    ctx.send(poise::CreateReply::new().embed(embed)).await?;
+
+    Ok(())
 }
 
 #[poise::command(
@@ -227,11 +299,12 @@ pub async fn dbg_cache(ctx: crate::Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn commands() -> [crate::Command; 4] {
+pub fn commands() -> [crate::Command; 5] {
     [
         badges(),
         all_badges(),
         invalidate_badge_cache(),
         dbg_cache(),
+        add_event(),
     ]
 }

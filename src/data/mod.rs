@@ -146,33 +146,41 @@ impl EventBadges {
                 animated: emoji.animated(),
                 discord_name: emoji.name.to_string(),
                 discord_id: emoji.id.get(),
+                // TODO: not hardcode this.
+                metadata: Metadata::Participant,
+                link: None,
             });
         }
 
         let mut transaction = self.db.begin().await?;
 
-        let event_id = query!("INSERT INTO events (event_name) VALUES (?)", name)
-            .execute(&mut *transaction)
-            .await?
-            .last_insert_rowid();
+        // TODO: no hardcoding.
+        let event_id = query!(
+            "INSERT INTO events (event_name, event_date) VALUES (?, ?)",
+            name,
+            0
+        )
+        .execute(&mut *transaction)
+        .await?
+        .last_insert_rowid();
 
-        for (index, badge) in completed_badges.iter().enumerate() {
+        for badge in &completed_badges {
             let discord_id = badge.discord_id as i64;
-            let index = (index + 1) as i64;
             sqlx::query!(
-                    r#"
-                    INSERT INTO badges (event_id, friendly_name, animated, emoji_name, emoji_id, badge_index)
+                r#"
+                    INSERT INTO badges (event_id, friendly_name, animated, emoji_name, emoji_id, metadata)
                     VALUES (?, ?, ?, ?, ?, ?)
                     "#,
-                    event_id,
-                    badge.name,
-                    badge.animated,
-                    badge.discord_name,
-                    discord_id,
-                    index
-                )
-                .execute( &mut *transaction)
-                .await?;
+                event_id,
+                badge.name,
+                badge.animated,
+                badge.discord_name,
+                discord_id,
+                // TODO: not hardcode
+                "Participant"
+            )
+            .execute(&mut *transaction)
+            .await?;
         }
 
         transaction.commit().await?;
@@ -204,8 +212,8 @@ impl EventBadges {
             .collect::<Vec<_>>();
 
         let badges = query!(
-            "SELECT event_id, emoji_id, emoji_name, animated, friendly_name FROM badges ORDER BY \
-             badge_index"
+            "SELECT event_id, emoji_id, emoji_name, animated, friendly_name, metadata, link FROM \
+             badges ORDER BY id"
         )
         .fetch_all(&self.db)
         .await
@@ -218,6 +226,8 @@ impl EventBadges {
                     animated: badge.animated,
                     discord_name: badge.emoji_name,
                     discord_id: badge.emoji_id as u64,
+                    metadata: Metadata::from_str(&badge.metadata).unwrap_or_default(),
+                    link: badge.link,
                 };
 
                 event.badges.push(badge);
@@ -236,6 +246,67 @@ impl EventBadges {
         *cache = vec![];
         self.setup.store(false, Ordering::SeqCst);
     }
+
+    pub async fn get_total_events(&self) -> Result<u8, Error> {
+        self.populate().await?;
+
+        Ok(self.events.read().len() as u8)
+    }
+
+    pub async fn get_user_badges(
+        &self,
+        user_id: UserId,
+    ) -> Result<Vec<(Badge, String, u64)>, Error> {
+        self.populate().await?;
+        let user_id = user_id.get() as i64;
+
+        Ok(query!(
+            r#"
+            SELECT
+                u.user_id AS user_id,
+                b.event_id AS event_id,
+                b.friendly_name AS badge_name,
+                b.animated AS animated,
+                b.emoji_name AS emoji_name,
+                b.emoji_id AS emoji_id,
+                b.metadata AS metadata,
+                b.link AS link,
+                e.event_date AS event_date,
+                e.event_name AS event_name
+            FROM
+                users u
+            JOIN
+                user_event_badges ueb ON u.id = ueb.user_id
+            JOIN
+                badges b ON b.id = ueb.badge_id
+            JOIN
+                events e ON b.event_id = e.id
+            WHERE
+                u.user_id = ?
+            ORDER BY
+                e.event_date DESC
+            "#,
+            user_id
+        )
+        .fetch_all(&self.db)
+        .await?
+        .into_iter()
+        .map(|r| {
+            (
+                Badge {
+                    name: r.badge_name,
+                    animated: r.animated,
+                    discord_name: r.emoji_name,
+                    discord_id: r.emoji_id as u64,
+                    metadata: Metadata::from_str(&r.metadata).unwrap_or_default(),
+                    link: r.link,
+                },
+                r.event_name,
+                r.event_date as u64,
+            )
+        })
+        .collect())
+    }
 }
 
 #[derive(Debug)]
@@ -253,6 +324,38 @@ pub struct Badge {
     pub animated: bool,
     pub discord_name: String,
     pub discord_id: u64,
+    pub metadata: Metadata,
+    pub link: Option<String>,
+}
+
+impl Badge {
+    pub fn markdown(&self) -> String {
+        if self.animated {
+            format!("<a:{}:{}>", self.discord_name, self.discord_id)
+        } else {
+            format!("<:{}:{}>", self.discord_name, self.discord_id)
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub enum Metadata {
+    Winner,
+    #[default]
+    Participant,
+    // BOTH type.
+}
+
+impl Metadata {
+    fn from_str(s: &str) -> Option<Self> {
+        if s == "Winner" {
+            Some(Self::Winner)
+        } else if s == "Participant" {
+            Some(Self::Participant)
+        } else {
+            None
+        }
+    }
 }
 
 impl Eq for Event {}

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT event_id, emoji_id, emoji_name, animated, friendly_name FROM badges ORDER BY badge_index",
+  "query": "SELECT event_id, emoji_id, emoji_name, animated, friendly_name, metadata, link FROM badges ORDER BY id",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,16 @@
         "name": "friendly_name",
         "ordinal": 4,
         "type_info": "Text"
+      },
+      {
+        "name": "metadata",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "link",
+        "ordinal": 6,
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -37,8 +47,10 @@
       false,
       false,
       false,
-      false
+      false,
+      false,
+      true
     ]
   },
-  "hash": "93f63ab956702a72713840b99ceec2e56fbb6e187815423839c6c8e56da54577"
+  "hash": "112f80764d7efc3fdb934983341a1ade9be345185c4a1b3ac4c167bf578dd26c"
 }
