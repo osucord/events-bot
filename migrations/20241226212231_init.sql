@@ -12,7 +12,7 @@ CREATE TABLE badges (
 
     animated BOOLEAN NOT NULL,
     emoji_name TEXT NOT NULL,
-    emoji_id BIGINT NOT NULL,
+    emoji_id INTEGER NOT NULL,
 
     -- Valid options are "Winner" and "Participant", other values may be discarded.
     metadata TEXT NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE badges (
 
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id BIGINT NOT NULL
+    user_id INTEGER NOT NULL
 );
 
 CREATE TABLE user_event_badges (
