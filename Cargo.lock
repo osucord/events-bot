@@ -571,7 +571,6 @@ dependencies = [
  "dotenvy",
  "parking_lot",
  "poise",
- "rand",
  "regex",
  "serde",
  "serde_json",

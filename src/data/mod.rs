@@ -8,13 +8,11 @@ use crate::Error;
 use aformat::ArrayString;
 use parking_lot::RwLock;
 use poise::serenity_prelude::{ChannelId, GuildId, RoleId, UserId};
-use rand::Rng;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serenity::all::CreateAttachment;
 use serialize::regex_patterns;
 use sqlx::{query, SqlitePool};
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -77,114 +75,64 @@ impl EventBadges {
         &self,
         ctx: &serenity::all::Context,
         name: String,
-        badge_names: Vec<String>,
-        attachments: Vec<Vec<u8>>,
+        badge_name: String,
+        attachment: Vec<u8>,
     ) -> Result<(), Error> {
-        let mut placeholder_emote = None;
-
         if name.len() > 120 {
             return Err("Are you sure you want a name that long? it'll be hard to read.".into());
         }
 
-        if badge_names
-            .iter()
-            .any(|n| n.len() > 27 /* 4 digits and an underscore is 32 */)
-        {
+        // 4 digits and an underscore is 32
+        if badge_name.len() > 27 {
             return Err("One or more of your badge names will be too long!".into());
-        }
+        };
 
-        if attachments.len() > badge_names.len() {
-            return Err("You have more attachments than names for them!".into());
-        }
+        let emoji = ctx
+            .create_application_emoji(
+                &badge_name,
+                &CreateAttachment::bytes(attachment, "a").to_base64(),
+            )
+            .await?;
 
-        if badge_names.len() != attachments.len() {
-            let emojis: Vec<serenity::model::prelude::Emoji> =
-                ctx.http.get_application_emojis().await?;
-            let Some(placeholder) = emojis.iter().find(|e| e.name == "placeholder") else {
-                return Err(
-                    "Not enough badges attachments were provided and no placeholder exists!".into(),
-                );
-            };
-
-            placeholder_emote = Some(placeholder.clone());
-        }
-
-        let mut completed_badges = vec![];
-
-        let mut attachment_iter = attachments.into_iter();
-        for badge_name in badge_names {
-            let attachment = attachment_iter.next().unwrap_or_default();
-            let emoji = if attachment.is_empty() {
-                // Fallback to the placeholder emote if the attachment is empty
-                Cow::Borrowed(&placeholder_emote)
-            } else {
-                let rand = {
-                    let mut rng = rand::thread_rng();
-                    rng.gen_range(1000..10000)
-                };
-
-                let new_emoji = ctx
-                    .create_application_emoji(
-                        &format!("{rand}_{badge_name}"),
-                        &CreateAttachment::bytes(attachment, "a").to_base64(),
-                    )
-                    .await?;
-                Cow::Owned(Some(new_emoji))
-            };
-
-            // i refactored and i'm not sure if this is even unreachable anymore.
-            // but i'm always gonna run it with the placeholder and i'm not gonna like... check? lol
-            let Some(ref emoji) = *emoji else {
-                return Err("There's no badge?".into());
-            };
-
-            completed_badges.push(Badge {
-                name: badge_name,
-                animated: emoji.animated(),
-                discord_name: emoji.name.to_string(),
-                discord_id: emoji.id.get(),
-                // TODO: not hardcode this.
-                metadata: Metadata::Participant,
-                link: None,
-            });
-        }
+        let badge = Badge {
+            animated: emoji.animated(),
+            discord_name: emoji.name.to_string(),
+            discord_id: emoji.id.get(),
+            link: None,
+        };
 
         let mut transaction = self.db.begin().await?;
+        let d_id = badge.discord_id as i64;
 
-        // TODO: no hardcoding.
-        let event_id = query!(
-            "INSERT INTO events (event_name, event_date) VALUES (?, ?)",
-            name,
-            0
+        let badge_id = sqlx::query!(
+            r#"
+            INSERT INTO badges (animated, emoji_name, emoji_id)
+            VALUES (?, ?, ?)
+            "#,
+            badge.animated,
+            badge.discord_name,
+            d_id
         )
         .execute(&mut *transaction)
         .await?
         .last_insert_rowid();
 
-        for badge in &completed_badges {
-            let discord_id = badge.discord_id as i64;
-            sqlx::query!(
-                r#"
-                    INSERT INTO badges (event_id, friendly_name, animated, emoji_name, emoji_id, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    "#,
-                event_id,
-                badge.name,
-                badge.animated,
-                badge.discord_name,
-                discord_id,
-                // TODO: not hardcode
-                "Participant"
-            )
-            .execute(&mut *transaction)
-            .await?;
-        }
+        // TODO: no hardcoding.
+        let event_id = query!(
+            "INSERT INTO events (event_name, event_date, badge_id) VALUES (?, ?, ?)",
+            name,
+            0,
+            badge_id
+        )
+        .execute(&mut *transaction)
+        .await?
+        .last_insert_rowid();
 
         transaction.commit().await?;
         self.events.write().push(Event {
             id: event_id as u16,
             name,
-            badges: completed_badges,
+            badge,
         });
 
         Ok(())
@@ -196,40 +144,39 @@ impl EventBadges {
             return Err(false);
         }
 
-        let mut events = query!("SELECT id, event_name FROM events")
-            .fetch_all(&self.db)
-            .await
-            .map_err(|_| true)?
-            .into_iter()
-            .map(|row| Event {
-                id: row.id as u16,
-                name: row.event_name,
-                badges: Vec::new(),
-            })
-            .collect::<Vec<_>>();
-
-        let badges = query!(
-            "SELECT event_id, emoji_id, emoji_name, animated, friendly_name, metadata, link FROM \
-             badges ORDER BY id"
+        let events = query!(
+            r#"
+            SELECT
+                events.id AS event_id,
+                events.event_name,
+                events.badge_id,
+                badges.link,
+                badges.animated,
+                badges.emoji_name,
+                badges.emoji_id
+            FROM
+                events
+            INNER JOIN
+                badges
+            ON
+                events.badge_id = badges.id;
+            "#
         )
         .fetch_all(&self.db)
         .await
-        .map_err(|_| true)?;
-
-        for badge in badges {
-            if let Some(event) = events.iter_mut().find(|e| e.id == badge.event_id as u16) {
-                let badge = Badge {
-                    name: badge.friendly_name,
-                    animated: badge.animated,
-                    discord_name: badge.emoji_name,
-                    discord_id: badge.emoji_id as u64,
-                    metadata: Metadata::from_str(&badge.metadata).unwrap_or_default(),
-                    link: badge.link,
-                };
-
-                event.badges.push(badge);
-            }
-        }
+        .map_err(|_| true)?
+        .into_iter()
+        .map(|row| Event {
+            id: row.event_id as u16,
+            name: row.event_name,
+            badge: Badge {
+                animated: row.animated,
+                discord_name: row.emoji_name,
+                discord_id: row.emoji_id as u64,
+                link: row.link,
+            },
+        })
+        .collect::<Vec<_>>();
 
         *self.events.write() = events;
         self.setup.store(true, Ordering::SeqCst);
@@ -253,7 +200,7 @@ impl EventBadges {
     pub async fn get_user_badges(
         &self,
         user_id: UserId,
-    ) -> Result<Vec<(Badge, String, u64)>, Error> {
+    ) -> Result<Vec<(Badge, String, u64, bool)>, Error> {
         self.populate().await?;
         let user_id = user_id.get() as i64;
 
@@ -261,23 +208,21 @@ impl EventBadges {
             r#"
             SELECT
                 u.user_id AS user_id,
-                b.event_id AS event_id,
-                b.friendly_name AS badge_name,
                 b.animated AS animated,
                 b.emoji_name AS emoji_name,
                 b.emoji_id AS emoji_id,
-                b.metadata AS metadata,
                 b.link AS link,
                 e.event_date AS event_date,
-                e.event_name AS event_name
+                e.event_name AS event_name,
+                ub.winner AS winner
             FROM
                 users u
             JOIN
-                user_event_badges ueb ON u.id = ueb.user_id
+                user_badges ub ON u.id = ub.user_id
             JOIN
-                badges b ON b.id = ueb.badge_id
+                events e ON ub.event_id = e.id
             JOIN
-                events e ON b.event_id = e.id
+                badges b ON b.id = e.badge_id
             WHERE
                 u.user_id = ?
             ORDER BY
@@ -291,15 +236,14 @@ impl EventBadges {
         .map(|r| {
             (
                 Badge {
-                    name: r.badge_name,
                     animated: r.animated,
                     discord_name: r.emoji_name,
                     discord_id: r.emoji_id as u64,
-                    metadata: Metadata::from_str(&r.metadata).unwrap_or_default(),
                     link: r.link,
                 },
                 r.event_name,
                 r.event_date as u64,
+                r.winner,
             )
         })
         .collect())
@@ -312,16 +256,14 @@ pub struct Event {
     /// Event's id, autoincrementing from database starting at 1.
     pub id: u16,
     pub name: String,
-    pub badges: Vec<Badge>,
+    pub badge: Badge,
 }
 
 #[derive(Debug)]
 pub struct Badge {
-    pub name: String,
     pub animated: bool,
     pub discord_name: String,
     pub discord_id: u64,
-    pub metadata: Metadata,
     pub link: Option<String>,
 }
 
@@ -331,26 +273,6 @@ impl Badge {
             format!("<a:{}:{}>", self.discord_name, self.discord_id)
         } else {
             format!("<:{}:{}>", self.discord_name, self.discord_id)
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-pub enum Metadata {
-    Winner,
-    #[default]
-    Participant,
-    // BOTH type.
-}
-
-impl Metadata {
-    fn from_str(s: &str) -> Option<Self> {
-        if s == "Winner" {
-            Some(Self::Winner)
-        } else if s == "Participant" {
-            Some(Self::Participant)
-        } else {
-            None
         }
     }
 }

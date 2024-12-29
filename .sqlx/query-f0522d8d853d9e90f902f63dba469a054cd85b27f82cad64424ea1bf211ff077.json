@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                events.id AS event_id,\n                events.event_name,\n                events.badge_id,\n                badges.link,\n                badges.animated,\n                badges.emoji_name,\n                badges.emoji_id\n            FROM\n                events\n            INNER JOIN\n                badges\n            ON\n                events.badge_id = badges.id;\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "event_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "event_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "badge_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "link",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "animated",
+        "ordinal": 4,
+        "type_info": "Bool"
+      },
+      {
+        "name": "emoji_name",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "emoji_id",
+        "ordinal": 6,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f0522d8d853d9e90f902f63dba469a054cd85b27f82cad64424ea1bf211ff077"
+}

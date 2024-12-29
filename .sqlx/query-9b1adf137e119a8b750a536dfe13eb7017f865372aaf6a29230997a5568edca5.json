@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO badges (animated, emoji_name, emoji_id)\n            VALUES (?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "9b1adf137e119a8b750a536dfe13eb7017f865372aaf6a29230997a5568edca5"
+}
