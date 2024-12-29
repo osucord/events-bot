@@ -3,6 +3,7 @@
 #![allow(clippy::unreadable_literal)]
 
 use poise::serenity_prelude as serenity;
+use serenity::GatewayIntents;
 use std::{env, sync::Arc, time::Duration};
 
 mod commands;
@@ -43,7 +44,10 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 async fn main() {
     let _ = dotenvy::dotenv();
     let token = serenity::Token::from_env("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
-    let intents = serenity::GatewayIntents::all();
+    let intents = GatewayIntents::GUILDS
+        | GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::DIRECT_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT;
 
     let options = poise::FrameworkOptions {
         commands: commands::commands(),

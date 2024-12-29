@@ -82,8 +82,7 @@ impl EventBadges {
             return Err("Are you sure you want a name that long? it'll be hard to read.".into());
         }
 
-        // 4 digits and an underscore is 32
-        if badge_name.len() > 27 {
+        if badge_name.len() > 32 {
             return Err("One or more of your badge names will be too long!".into());
         };
 

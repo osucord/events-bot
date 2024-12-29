@@ -120,7 +120,7 @@ pub async fn dbg_cache(ctx: crate::Context<'_>) -> Result<(), Error> {
 /// Shows all events and their respective badge!
 #[poise::command(
     rename = "all-events",
-    aliases("all-badges"),
+    aliases("all-badges", "events"),
     prefix_command,
     slash_command
 )]
