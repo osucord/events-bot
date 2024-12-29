@@ -1,10 +1,11 @@
 use crate::{Context, Error};
 use std::fmt::Write;
 
+use itertools::Itertools;
 use poise::serenity_prelude::{self as serenity, User};
 
 /// View a users badges from all events they have participated in!
-#[poise::command(prefix_command, slash_command, guild_only)]
+#[poise::command(prefix_command, slash_command)]
 pub async fn badges(ctx: Context<'_>, user: Option<User>) -> Result<(), Error> {
     let user = user.as_ref().unwrap_or_else(|| ctx.author());
 
@@ -62,7 +63,7 @@ pub async fn invalidate_badge_cache(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(rename = "add-event", prefix_command, guild_only, owners_only)]
+#[poise::command(rename = "add-event", prefix_command, owners_only)]
 pub async fn add_event(
     ctx: crate::PrefixContext<'_>,
     attachment: serenity::all::Attachment,
@@ -116,6 +117,54 @@ pub async fn dbg_cache(ctx: crate::Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn commands() -> [crate::Command; 4] {
-    [badges(), invalidate_badge_cache(), dbg_cache(), add_event()]
+/// Shows all events and their respective badge!
+#[poise::command(
+    rename = "all-events",
+    aliases("all-badges"),
+    prefix_command,
+    slash_command
+)]
+pub async fn all_events(ctx: crate::Context<'_>) -> Result<(), Error> {
+    let events = ctx
+        .data()
+        .badges
+        .get_events()
+        .await?
+        .iter()
+        .cloned()
+        .sorted_by(|a, b| b.date.cmp(&a.date))
+        .collect::<Vec<_>>();
+
+    let mut events_str = String::new();
+    for event in events {
+        let name = &event.name;
+        let name = if let Some(link) = &event.badge.link {
+            Cow::Owned(format!("[{name}]({link})"))
+        } else {
+            Cow::Borrowed(name)
+        };
+
+        let emoji = event.badge.markdown();
+
+        writeln!(events_str, "{emoji} {name} - <t:{}:R>", event.date).unwrap();
+    }
+
+    let embed = serenity::CreateEmbed::new()
+        .title("All events")
+        .color(serenity::Color::BLUE)
+        .description(events_str);
+
+    ctx.send(poise::CreateReply::new().embed(embed)).await?;
+
+    Ok(())
+}
+
+pub fn commands() -> [crate::Command; 5] {
+    [
+        badges(),
+        invalidate_badge_cache(),
+        dbg_cache(),
+        add_event(),
+        all_events(),
+    ]
 }

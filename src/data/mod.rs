@@ -132,6 +132,7 @@ impl EventBadges {
         self.events.write().push(Event {
             id: event_id as u16,
             name,
+            date: 0,
             badge,
         });
 
@@ -150,6 +151,7 @@ impl EventBadges {
                 events.id AS event_id,
                 events.event_name,
                 events.badge_id,
+                events.event_date,
                 badges.link,
                 badges.animated,
                 badges.emoji_name,
@@ -169,6 +171,7 @@ impl EventBadges {
         .map(|row| Event {
             id: row.event_id as u16,
             name: row.event_name,
+            date: row.event_date as u64,
             badge: Badge {
                 animated: row.animated,
                 discord_name: row.emoji_name,
@@ -250,16 +253,17 @@ impl EventBadges {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Event {
     // We won't have negative events or more than 255.
     /// Event's id, autoincrementing from database starting at 1.
     pub id: u16,
     pub name: String,
+    pub date: u64,
     pub badge: Badge,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Badge {
     pub animated: bool,
     pub discord_name: String,
