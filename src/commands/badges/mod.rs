@@ -4,6 +4,9 @@ use std::fmt::Write;
 use itertools::Itertools;
 use poise::serenity_prelude::{self as serenity, User};
 
+mod users;
+pub mod wrapper;
+
 /// View a users badges from all events they have participated in!
 #[poise::command(prefix_command, slash_command)]
 pub async fn badges(ctx: Context<'_>, user: Option<User>) -> Result<(), Error> {
@@ -159,12 +162,15 @@ pub async fn all_events(ctx: crate::Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn commands() -> [crate::Command; 5] {
-    [
+pub fn commands() -> Vec<crate::Command> {
+    vec![
         badges(),
         invalidate_badge_cache(),
         dbg_cache(),
         add_event(),
         all_events(),
     ]
+    .into_iter()
+    .chain(users::commands())
+    .collect()
 }

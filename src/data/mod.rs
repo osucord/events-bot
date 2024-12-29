@@ -250,6 +250,117 @@ impl EventBadges {
         })
         .collect())
     }
+
+    pub async fn add_user_badge(
+        &self,
+        user_id: UserId,
+        name: &str,
+        winner: bool,
+    ) -> Result<(), Error> {
+        self.populate().await?;
+
+        let event_id = self
+            .events
+            .read()
+            .iter()
+            .find(|e| e.name.contains(name))
+            .map(|e| e.id);
+
+        if let Some(event_id) = event_id {
+            self.add_user_badge_(user_id.get() as i64, event_id, i8::from(winner))
+                .await?;
+            return Ok(());
+        }
+
+        Err("Event does not exist with that name".into())
+    }
+
+    async fn add_user_badge_(&self, user_id: i64, event_id: u16, winner: i8) -> Result<(), Error> {
+        self.populate().await?;
+
+        if !self.events.read().iter().any(|e| e.id == event_id) {
+            return Err("Event does not exist.".into());
+        }
+
+        query!(
+            r#"
+            INSERT INTO users (user_id)
+            VALUES (?)
+            ON CONFLICT DO NOTHING
+            "#,
+            user_id
+        )
+        .execute(&self.db)
+        .await?;
+
+        let user_id = query!(
+            r#"
+            SELECT id FROM users WHERE user_id = ?
+            "#,
+            user_id
+        )
+        .fetch_one(&self.db)
+        .await?
+        .id;
+
+        query!(
+            r#"
+            INSERT INTO user_badges (user_id, event_id, winner)
+            VALUES (?, ?, ?)
+            ON CONFLICT (user_id, event_id)
+            DO UPDATE SET winner = EXCLUDED.winner
+            "#,
+            user_id,
+            event_id,
+            winner
+        )
+        .execute(&self.db)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn remove_user_badge(&self, user_id: UserId, name: &str) -> Result<(), Error> {
+        self.populate().await?;
+
+        let event_id = self
+            .events
+            .read()
+            .iter()
+            .find(|e| e.name.contains(name))
+            .map(|e| e.id);
+
+        if let Some(event_id) = event_id {
+            self.remove_user_badge_(user_id.get() as i64, event_id)
+                .await?;
+            return Ok(());
+        }
+
+        Err("Event does not exist with that name".into())
+    }
+
+    async fn remove_user_badge_(&self, user_id: i64, event_id: u16) -> Result<(), Error> {
+        self.populate().await?;
+
+        if !self.events.read().iter().any(|e| e.id == event_id) {
+            return Err("Event does not exist.".into());
+        }
+
+        query!(
+            r#"
+            DELETE FROM user_badges
+            WHERE user_id = (SELECT id FROM users WHERE user_id = ?)
+              AND event_id = ?
+            "#,
+            user_id,
+            event_id
+        )
+        .execute(&self.db)
+        .await
+        .map_err(|_| "User did not have this badge.")?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
