@@ -1,4 +1,4 @@
-use crate::{Context, Error};
+use crate::{data::BadgeKind, Context, Error};
 use std::fmt::Write;
 
 use itertools::Itertools;
@@ -21,36 +21,79 @@ pub async fn badges(ctx: Context<'_>, user: Option<User>) -> Result<(), Error> {
 
     let total_events = ctx.data().badges.get_total_events().await?;
 
+    let (contributed_count, participated_count) =
+        badges
+            .iter()
+            .fold((0, 0), |(mut contributed, mut participated), b| {
+                if matches!(b.badge_kind, BadgeKind::Contributed | BadgeKind::Both) {
+                    contributed += 1;
+                }
+                if matches!(b.badge_kind, BadgeKind::Participated | BadgeKind::Both) {
+                    participated += 1;
+                }
+                (contributed, participated)
+            });
+
     let mut value = String::new();
-    for (badge, name, timestamp, winner) in &badges {
-        let name = if let Some(link) = &badge.link {
+    let mut contribution = String::new();
+    for user_badge in &badges {
+        let name = &user_badge.event.name;
+        let timestamp = user_badge.event.date;
+
+        let name = if let Some(link) = &user_badge.badge.link {
             Cow::Owned(format!("[{name}]({link})"))
         } else {
             Cow::Borrowed(name)
         };
 
-        let emoji = badge.markdown();
+        let emoji = user_badge.badge.markdown();
 
-        if *winner {
-            writeln!(value, "{emoji} {name} (👑 winner) - <t:{timestamp}:R>").unwrap();
-        } else {
-            writeln!(value, "{emoji} {name} - <t:{timestamp}:R>").unwrap();
-        };
+        match user_badge.badge_kind {
+            crate::data::BadgeKind::Participated => {
+                write_badge_line(&mut value, &emoji, &name, timestamp, user_badge.winner);
+            }
+            crate::data::BadgeKind::Contributed => {
+                writeln!(contribution, "{emoji} {name} - <t:{timestamp}:R>").unwrap();
+            }
+            crate::data::BadgeKind::Both => {
+                write_badge_line(&mut value, &emoji, &name, timestamp, user_badge.winner);
+                writeln!(contribution, "{emoji} {name} - <t:{timestamp}:R>").unwrap();
+            }
+        }
     }
 
-    let embed = serenity::CreateEmbed::new()
+    let mut embed = serenity::CreateEmbed::new()
         .author(serenity::CreateEmbedAuthor::new(user.name.clone()))
         .color(serenity::Colour::BLUE)
-        .field(
-            format!("Participated Events `{}/{total_events}`", badges.len()),
-            value,
-            true,
-        )
         .thumbnail(user.face());
+
+    if participated_count != 0 {
+        embed = embed.field(
+            format!("Participated Events `{participated_count}/{total_events}`"),
+            value,
+            false,
+        );
+    }
+
+    if contributed_count != 0 {
+        embed = embed.field(
+            format!("Contributed Events `{contributed_count}/{total_events}`"),
+            contribution,
+            false,
+        );
+    }
 
     ctx.send(poise::CreateReply::new().embed(embed)).await?;
 
     Ok(())
+}
+
+fn write_badge_line(buffer: &mut String, emoji: &str, name: &str, timestamp: u64, is_winner: bool) {
+    if is_winner {
+        writeln!(buffer, "{emoji} {name} (👑 winner) - <t:{timestamp}:R>").unwrap();
+    } else {
+        writeln!(buffer, "{emoji} {name} - <t:{timestamp}:R>").unwrap();
+    }
 }
 
 #[poise::command(

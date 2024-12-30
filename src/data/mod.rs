@@ -8,6 +8,7 @@ use crate::Error;
 use aformat::ArrayString;
 use parking_lot::RwLock;
 use poise::serenity_prelude::{ChannelId, GuildId, RoleId, UserId};
+use poise::ChoiceParameter;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serenity::all::CreateAttachment;
@@ -199,10 +200,7 @@ impl EventBadges {
         Ok(self.events.read().len() as u8)
     }
 
-    pub async fn get_user_badges(
-        &self,
-        user_id: UserId,
-    ) -> Result<Vec<(Badge, String, u64, bool)>, Error> {
+    pub async fn get_user_badges(&self, user_id: UserId) -> Result<Vec<UserBadge>, Error> {
         self.populate().await?;
         let user_id = user_id.get() as i64;
 
@@ -216,7 +214,8 @@ impl EventBadges {
                 b.link AS link,
                 e.event_date AS event_date,
                 e.event_name AS event_name,
-                ub.winner AS winner
+                ub.winner AS winner,
+                ub.badge_kind as badge_kind
             FROM
                 users u
             JOIN
@@ -235,18 +234,19 @@ impl EventBadges {
         .fetch_all(&self.db)
         .await?
         .into_iter()
-        .map(|r| {
-            (
-                Badge {
-                    animated: r.animated,
-                    discord_name: r.emoji_name,
-                    discord_id: r.emoji_id as u64,
-                    link: r.link,
-                },
-                r.event_name,
-                r.event_date as u64,
-                r.winner,
-            )
+        .map(|r| UserBadge {
+            event: PartialEvent {
+                name: r.event_name,
+                date: r.event_date as u64,
+            },
+            badge: Badge {
+                animated: r.animated,
+                discord_name: r.emoji_name,
+                discord_id: r.emoji_id as u64,
+                link: r.link,
+            },
+            badge_kind: BadgeKind::try_from(r.badge_kind).unwrap(),
+            winner: r.winner,
         })
         .collect())
     }
@@ -256,6 +256,7 @@ impl EventBadges {
         user_id: UserId,
         name: &str,
         winner: bool,
+        badge_kind: Option<BadgeKind>,
     ) -> Result<(), Error> {
         self.populate().await?;
 
@@ -267,15 +268,26 @@ impl EventBadges {
             .map(|e| e.id);
 
         if let Some(event_id) = event_id {
-            self.add_user_badge_(user_id.get() as i64, event_id, i8::from(winner))
-                .await?;
+            self.add_user_badge_(
+                user_id.get() as i64,
+                event_id,
+                i8::from(winner),
+                badge_kind.unwrap_or_default(),
+            )
+            .await?;
             return Ok(());
         }
 
         Err("Event does not exist with that name".into())
     }
 
-    async fn add_user_badge_(&self, user_id: i64, event_id: u16, winner: i8) -> Result<(), Error> {
+    async fn add_user_badge_(
+        &self,
+        user_id: i64,
+        event_id: u16,
+        winner: i8,
+        badge_kind: BadgeKind,
+    ) -> Result<(), Error> {
         self.populate().await?;
 
         if !self.events.read().iter().any(|e| e.id == event_id) {
@@ -303,16 +315,20 @@ impl EventBadges {
         .await?
         .id;
 
+        let badge_kind: i64 = badge_kind.into();
         query!(
             r#"
-            INSERT INTO user_badges (user_id, event_id, winner)
-            VALUES (?, ?, ?)
+            INSERT INTO user_badges (user_id, event_id, winner, badge_kind)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT (user_id, event_id)
-            DO UPDATE SET winner = EXCLUDED.winner
+            DO UPDATE SET
+                winner = EXCLUDED.winner,
+                badge_kind = EXCLUDED.badge_kind
             "#,
             user_id,
             event_id,
-            winner
+            winner,
+            badge_kind
         )
         .execute(&self.db)
         .await?;
@@ -363,6 +379,53 @@ impl EventBadges {
     }
 }
 
+pub struct UserBadge {
+    // TODO: don't need event every badge?
+    pub event: PartialEvent,
+    pub badge: Badge,
+    pub badge_kind: BadgeKind,
+    pub winner: bool,
+}
+
+#[derive(Default, PartialEq, ChoiceParameter, Copy, Clone, Debug)]
+pub enum BadgeKind {
+    #[default]
+    #[name = "Participated"]
+    #[name = "Part"]
+    #[name = "0"]
+    Participated,
+    #[name = "Contributed"]
+    #[name = "Contrib"]
+    #[name = "1"]
+    Contributed,
+    #[name = "Both"]
+    #[name = "2"]
+    Both,
+}
+
+impl TryFrom<i64> for BadgeKind {
+    type Error = &'static str;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(BadgeKind::Participated),
+            1 => Ok(BadgeKind::Contributed),
+            2 => Ok(BadgeKind::Both),
+            _ => Err("Invalid value for BadgeKind"),
+        }
+    }
+}
+
+impl From<BadgeKind> for i64 {
+    fn from(kind: BadgeKind) -> Self {
+        match kind {
+            BadgeKind::Participated => 0,
+            BadgeKind::Contributed => 1,
+            BadgeKind::Both => 2,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Event {
     // We won't have negative events or more than 255.
@@ -371,6 +434,11 @@ pub struct Event {
     pub name: String,
     pub date: u64,
     pub badge: Badge,
+}
+
+pub struct PartialEvent {
+    pub name: String,
+    pub date: u64,
 }
 
 #[derive(Debug, Clone)]

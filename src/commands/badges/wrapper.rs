@@ -1,6 +1,7 @@
 use poise::serenity_prelude as serenity;
 
 /// Wrapper type for a collection of `serenity::UserId`.
+#[derive(Debug)]
 pub struct MultipleUserId(pub Vec<serenity::UserId>);
 
 static RE: std::sync::LazyLock<regex::Regex> =
