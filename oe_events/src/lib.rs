@@ -1,3 +1,6 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
+
 use poise::serenity_prelude as serenity;
 
 pub(crate) use oe_core::structs::{Data, Error, FrameworkContext};
@@ -13,7 +16,7 @@ pub async fn handler(
         }
         serenity::FullEvent::InteractionCreate { interaction } => match interaction {
             serenity::Interaction::Component(press) => {
-                escape_room::interaction::handle_component(framework, press).await?
+                escape_room::interaction::handle_component(framework, press).await?;
             }
             _ => return Ok(()),
         },

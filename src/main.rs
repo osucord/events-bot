@@ -1,6 +1,4 @@
 #![warn(clippy::pedantic)]
-// they aren't really that unreadable.
-#![allow(clippy::unreadable_literal)]
 
 use poise::serenity_prelude as serenity;
 use serenity::GatewayIntents;
