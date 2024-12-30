@@ -77,15 +77,15 @@ pub async fn set_question(
                 }
             }
 
-            if let Some(question) = room.questions.get((question_num - 1) as usize) {
+            match room.questions.get((question_num - 1) as usize) { Some(question) => {
                 if let Some(role) = question.role_id {
                     member_roles.push(role);
                 } else {
                     failure = true;
                 };
-            } else {
+            } _ => {
                 failure = true;
-            }
+            }}
         }
     };
 

@@ -401,11 +401,11 @@ pub async fn send_messages_core(
 
     if let Some(url) = &question.image_path {
         let attachment = CreateAttachment::path(url).await;
-        if let Ok(attachment) = attachment {
+        match attachment { Ok(attachment) => {
             builder = builder.add_file(attachment);
-        } else {
+        } _ => {
             return Err(format!("Could not set image for question {question_number}").into());
-        }
+        }}
     }
 
     if let Some(custom_id) = question.custom_id {
@@ -421,13 +421,13 @@ pub async fn send_messages_core(
 
     if let Some(url) = &question.attachment_path {
         let attachment = CreateAttachment::path(url).await;
-        if let Ok(attachment) = attachment {
+        match attachment { Ok(attachment) => {
             channel_id
                 .send_message(ctx.http(), CreateMessage::new().add_file(attachment))
                 .await?;
-        } else {
+        } _ => {
             return Err(format!("Could not set attachment for question {question_number}").into());
-        }
+        }}
     };
     Ok(())
 }
@@ -464,11 +464,11 @@ fn member_permissions(guild: &serenity::Guild, member: &serenity::Member) -> Per
         return Permissions::all();
     }
 
-    let mut permissions = if let Some(role) = guild.roles.get(&RoleId::new(guild.id.get())) {
+    let mut permissions = match guild.roles.get(&RoleId::new(guild.id.get())) { Some(role) => {
         role.permissions
-    } else {
+    } _ => {
         Permissions::empty()
-    };
+    }};
 
     for role_id in &member.roles {
         if let Some(role) = guild.roles.get(role_id) {
