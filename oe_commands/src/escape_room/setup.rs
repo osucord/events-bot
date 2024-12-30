@@ -2,10 +2,10 @@ use aformat::aformat;
 use std::borrow::Cow;
 use std::{fmt::Write, sync::Arc};
 
-use crate::commands::checks::not_active;
-use crate::commands::escape_room::utils::activate::unlock_first_channel;
-use crate::data::Question;
+use crate::checks::not_active;
+use crate::escape_room::utils::activate::unlock_first_channel;
 use crate::{Context, Data, Error};
+use oe_core::structs::Question;
 use poise::serenity_prelude::{
     self as serenity, ChannelId, ChannelType, CreateAttachment, CreateButton, CreateMessage,
     GuildChannel, GuildId, PermissionOverwrite, PermissionOverwriteType, Permissions, RoleId,
@@ -401,11 +401,14 @@ pub async fn send_messages_core(
 
     if let Some(url) = &question.image_path {
         let attachment = CreateAttachment::path(url).await;
-        match attachment { Ok(attachment) => {
-            builder = builder.add_file(attachment);
-        } _ => {
-            return Err(format!("Could not set image for question {question_number}").into());
-        }}
+        match attachment {
+            Ok(attachment) => {
+                builder = builder.add_file(attachment);
+            }
+            _ => {
+                return Err(format!("Could not set image for question {question_number}").into());
+            }
+        }
     }
 
     if let Some(custom_id) = question.custom_id {
@@ -421,13 +424,18 @@ pub async fn send_messages_core(
 
     if let Some(url) = &question.attachment_path {
         let attachment = CreateAttachment::path(url).await;
-        match attachment { Ok(attachment) => {
-            channel_id
-                .send_message(ctx.http(), CreateMessage::new().add_file(attachment))
-                .await?;
-        } _ => {
-            return Err(format!("Could not set attachment for question {question_number}").into());
-        }}
+        match attachment {
+            Ok(attachment) => {
+                channel_id
+                    .send_message(ctx.http(), CreateMessage::new().add_file(attachment))
+                    .await?;
+            }
+            _ => {
+                return Err(
+                    format!("Could not set attachment for question {question_number}").into(),
+                );
+            }
+        }
     };
     Ok(())
 }
@@ -464,11 +472,10 @@ fn member_permissions(guild: &serenity::Guild, member: &serenity::Member) -> Per
         return Permissions::all();
     }
 
-    let mut permissions = match guild.roles.get(&RoleId::new(guild.id.get())) { Some(role) => {
-        role.permissions
-    } _ => {
-        Permissions::empty()
-    }};
+    let mut permissions = match guild.roles.get(&RoleId::new(guild.id.get())) {
+        Some(role) => role.permissions,
+        _ => Permissions::empty(),
+    };
 
     for role_id in &member.roles {
         if let Some(role) = guild.roles.get(role_id) {

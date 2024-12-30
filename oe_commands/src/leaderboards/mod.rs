@@ -1,4 +1,4 @@
-use aformat::{aformat, ToArrayString};
+use aformat::{ToArrayString, aformat};
 use std::{borrow::Cow, fmt::Write};
 
 /* mod average;
@@ -6,11 +6,11 @@ mod timed; */
 
 use crate::{Context, Error};
 use poise::{
+    CreateReply,
     serenity_prelude::{
         ComponentInteractionCollector, CreateActionRow, CreateButton, CreateEmbed,
         CreateInteractionResponse, CreateInteractionResponseMessage,
     },
-    CreateReply,
 };
 
 /// Display leaderboards!

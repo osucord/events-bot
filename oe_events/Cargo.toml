@@ -1,0 +1,14 @@
+[package]
+name = "oe_events"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aformat.workspace = true
+oe_core = { path = "../oe_core" }
+poise.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serenity.workspace = true
+small-fixed-array.workspace = true
+tokio.workspace = true

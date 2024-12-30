@@ -1,7 +1,7 @@
-use crate::commands::badges::wrapper::MultipleUserId;
-use crate::data::BadgeKind;
+use crate::badges::wrapper::MultipleUserId;
 use crate::{Context, Error};
 use ::serenity::all::CreateAllowedMentions;
+use oe_core::structs::BadgeKind;
 use poise::serenity_prelude::{self as serenity, User};
 
 use std::fmt::Write;

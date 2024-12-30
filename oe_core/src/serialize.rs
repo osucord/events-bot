@@ -1,5 +1,5 @@
 pub mod regex_patterns {
-    use base64::engine::{general_purpose, Engine as _};
+    use base64::engine::{Engine as _, general_purpose};
     use regex::Regex;
     use serde::{Deserialize, Deserializer, Serializer};
 

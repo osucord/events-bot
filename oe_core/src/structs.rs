@@ -1,23 +1,21 @@
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap
-)]
+pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub type Context<'a> = poise::Context<'a, Data, Error>;
+pub type PrefixContext<'a> = poise::PrefixContext<'a, Data, Error>;
+pub type FrameworkContext<'a> = poise::FrameworkContext<'a, Data, Error>;
+pub type Command = poise::Command<Data, Error>;
 
-use crate::Error;
+use crate::serialize::regex_patterns;
 use aformat::ArrayString;
 use parking_lot::RwLock;
-use poise::serenity_prelude::{ChannelId, GuildId, RoleId, UserId};
 use poise::ChoiceParameter;
+use poise::serenity_prelude::{ChannelId, GuildId, RoleId, UserId};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serenity::all::CreateAttachment;
-use serialize::regex_patterns;
-use sqlx::{query, SqlitePool};
+use sqlx::{SqlitePool, query};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
-mod serialize;
 
 pub struct Data {
     pub escape_room: RwLock<EscapeRoom>,
@@ -37,6 +35,7 @@ pub struct EventBadges {
 }
 
 impl EventBadges {
+    #[must_use]
     pub fn new(pool: &SqlitePool) -> Self {
         EventBadges {
             db: pool.clone(),
@@ -450,6 +449,7 @@ pub struct Badge {
 }
 
 impl Badge {
+    #[must_use]
     pub fn markdown(&self) -> String {
         if self.animated {
             format!("<a:{}:{}>", self.discord_name, self.discord_id)
@@ -523,6 +523,7 @@ pub struct QuestionPart {
 }
 
 impl Question {
+    #[must_use]
     pub fn new(content: String, parts: Vec<QuestionPart>) -> Self {
         Question {
             content,

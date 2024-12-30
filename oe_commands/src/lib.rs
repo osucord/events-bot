@@ -1,13 +1,15 @@
+use oe_core::structs::{Command, Context, Data, Error, PrefixContext};
+
 mod badges;
 mod checks;
 mod escape_room;
 mod leaderboards;
 mod meta;
 
-pub fn commands() -> Vec<crate::Command> {
-    escape_room::commands()
+pub fn commands() -> Vec<Command> {
+    meta::commands()
         .into_iter()
-        .chain(meta::commands())
+        .chain(escape_room::commands())
         .chain(leaderboards::commands())
         .chain(badges::commands())
         .collect()

@@ -1,4 +1,6 @@
-use crate::{data::BadgeKind, Context, Error};
+use crate::{Context, Error};
+use oe_core::structs::BadgeKind;
+
 use std::fmt::Write;
 
 use itertools::Itertools;
@@ -49,13 +51,13 @@ pub async fn badges(ctx: Context<'_>, user: Option<User>) -> Result<(), Error> {
         let emoji = user_badge.badge.markdown();
 
         match user_badge.badge_kind {
-            crate::data::BadgeKind::Participated => {
+            BadgeKind::Participated => {
                 write_badge_line(&mut value, &emoji, &name, timestamp, user_badge.winner);
             }
-            crate::data::BadgeKind::Contributed => {
+            BadgeKind::Contributed => {
                 writeln!(contribution, "{emoji} {name} - <t:{timestamp}:R>").unwrap();
             }
-            crate::data::BadgeKind::Both => {
+            BadgeKind::Both => {
                 write_badge_line(&mut value, &emoji, &name, timestamp, user_badge.winner);
                 writeln!(contribution, "{emoji} {name} - <t:{timestamp}:R>").unwrap();
             }

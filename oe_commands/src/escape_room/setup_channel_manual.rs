@@ -1,6 +1,6 @@
 use poise::CreateReply;
 
-use crate::{commands::escape_room::setup::maybe_send_messages, Context, Error};
+use crate::{Context, Error, escape_room::setup::maybe_send_messages};
 
 /// Resends a channels question.
 #[poise::command(

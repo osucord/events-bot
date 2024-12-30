@@ -1,58 +1,28 @@
 use std::{collections::hash_map::Entry, sync::Arc};
 
-use crate::{
-    data::{Data, Question},
-    Error, FrameworkContext,
-};
-use cooldown::{
+use crate::{Error, FrameworkContext};
+
+use super::cooldown::{
     check_cooldown, check_wrong_question_cooldown, wrong_answer_cooldown_handler,
     wrong_question_cooldown_handler,
 };
-use move_channel::move_to_next_channel;
+use crate::escape_room::move_channel::move_to_next_channel;
+use oe_core::structs::{Data, Question};
 use poise::serenity_prelude::{
     self as serenity, ChannelId, ComponentInteraction, CreateInteractionResponse,
-    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateQuickModal,
+    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, CreateMessage,
+    CreateQuickModal,
 };
 
-mod cooldown;
-mod log;
-mod move_channel;
-mod rejoin;
-use ::serenity::all::{CreateMessage, QuickModal};
+use ::serenity::all::QuickModal;
 use aformat::aformat;
-use log::log;
 use small_fixed_array::{FixedArray, FixedString};
-
-pub async fn handler(
-    event: &serenity::FullEvent,
-    framework: FrameworkContext<'_>,
-) -> Result<(), Error> {
-    match event {
-        serenity::FullEvent::Ready { data_about_bot, .. } => {
-            println!("Logged in as {}", data_about_bot.user.tag());
-        }
-        serenity::FullEvent::InteractionCreate { interaction } => match interaction {
-            serenity::Interaction::Component(press) => handle_component(framework, press).await?,
-            _ => return Ok(()),
-        },
-        serenity::FullEvent::GuildMemberAddition { new_member } => {
-            rejoin::handle(framework, new_member);
-        }
-        serenity::FullEvent::GuildMemberRemoval {
-            guild_id: _,
-            user,
-            member_data_if_available: _,
-        } => rejoin::leave(framework, user.id),
-        _ => {}
-    }
-    Ok(())
-}
 
 // Discord ids will never be small enough for this.
 #[allow(clippy::cast_sign_loss)]
 // oh my god this is pain.
 #[allow(clippy::too_many_lines)]
-async fn handle_component(
+pub(crate) async fn handle_component(
     framework: FrameworkContext<'_>,
     press: &ComponentInteraction,
 ) -> Result<(), Error> {
@@ -193,7 +163,7 @@ async fn handle_component(
             .await;
     }
 
-    log(
+    crate::escape_room::log::write(
         framework.serenity_context,
         &press.user,
         answers,

@@ -6,11 +6,7 @@ use poise::serenity_prelude as serenity;
 use serenity::GatewayIntents;
 use std::{env, sync::Arc, time::Duration};
 
-mod commands;
-mod data;
-mod events;
-
-use data::{Data, EscapeRoom, EventBadges};
+use oe_core::structs::{Data, EscapeRoom, EventBadges};
 
 use parking_lot::RwLock;
 
@@ -50,7 +46,7 @@ async fn main() {
         | GatewayIntents::MESSAGE_CONTENT;
 
     let options = poise::FrameworkOptions {
-        commands: commands::commands(),
+        commands: oe_commands::commands(),
         prefix_options: poise::PrefixFrameworkOptions {
             prefix: Some("events!".into()),
             additional_prefixes: vec![
@@ -65,7 +61,7 @@ async fn main() {
             ..Default::default()
         },
         on_error: |error| Box::pin(on_error(error)),
-        event_handler: |framework, event| Box::pin(events::handler(event, framework)),
+        event_handler: |framework, event| Box::pin(oe_events::handler(event, framework)),
         ..Default::default()
     };
 
