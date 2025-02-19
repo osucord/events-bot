@@ -140,7 +140,7 @@ pub fn commands() -> [crate::Command; 2] {
 }
 
 #[allow(clippy::unused_async)]
-async fn autocomplete_event<'a>(
+pub(super) async fn autocomplete_event<'a>(
     ctx: Context<'a>,
     partial: &'a str,
 ) -> serenity::CreateAutocompleteResponse<'a> {

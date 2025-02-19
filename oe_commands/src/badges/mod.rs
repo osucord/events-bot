@@ -1,4 +1,7 @@
+use crate::badges::users::autocomplete_event;
 use crate::{Context, Error};
+use ::serenity::all::Attachment;
+use chrono::TimeZone;
 use oe_core::structs::BadgeKind;
 
 use std::fmt::Write;
@@ -111,12 +114,12 @@ pub async fn invalidate_badge_cache(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(rename = "add-event", prefix_command, owners_only)]
-pub async fn add_event(
+#[poise::command(prefix_command, owners_only)]
+pub async fn add_event_prefix(
     ctx: crate::PrefixContext<'_>,
     attachment: serenity::all::Attachment,
-    name: String,
-    #[rest] badge_name: String,
+    badge_name: String,
+    #[rest] name: String,
 ) -> Result<(), Error> {
     if attachment.size > 250_000 {
         ctx.say("Badge is too big to be uploaded to discord as an emote")
@@ -135,6 +138,138 @@ pub async fn add_event(
 
     Ok(())
 }
+
+fn event_date_from_string(input: Option<&str>) -> Result<i64, Error> {
+    let event_date = if let Some(input) = input {
+        let datetime = if input.contains(' ') {
+            // If input includes time, parse as "YYYY-MM-DD HH:MM"
+            chrono::NaiveDateTime::parse_from_str(input, "%Y-%m-%d %H:%M")?
+        } else {
+            // If only date is provided, default to "YYYY-MM-DD 00:00"
+            let date = chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d")?;
+            date.and_hms_opt(0, 0, 0).unwrap_or_default()
+        };
+
+        let datetime_utc = chrono::Utc.from_utc_datetime(&datetime);
+
+        datetime_utc.timestamp()
+    } else {
+        0
+    };
+
+    Ok(event_date)
+}
+
+#[poise::command(rename = "add-event", slash_command, owners_only)]
+pub async fn add_event(
+    ctx: crate::Context<'_>,
+    attachment: serenity::all::Attachment,
+    badge_name: String,
+    name: String,
+    link: Option<String>,
+    event_date: Option<String>,
+) -> Result<(), Error> {
+    if attachment.size > 250_000 {
+        ctx.say("Badge is too big to be uploaded to discord as an emote")
+            .await?;
+        return Ok(());
+    }
+
+    let attachment_bytes = attachment.download().await?;
+
+    ctx.data()
+        .badges
+        .new_event_slash(
+            ctx.serenity_context(),
+            name,
+            badge_name,
+            attachment_bytes,
+            link,
+            event_date_from_string(event_date.as_deref())?,
+        )
+        .await?;
+
+    ctx.say("Event added!").await?;
+
+    Ok(())
+}
+
+#[poise::command(rename = "update-link", slash_command, owners_only)]
+pub async fn update_link(
+    ctx: crate::Context<'_>,
+    #[autocomplete = "autocomplete_event"] event_name: String,
+    link: Option<String>,
+) -> Result<(), Error> {
+    let id = ctx.data().badges.event_id_from_name(&event_name).await?;
+
+    let Some(id) = id else {
+        ctx.say("Could not find event with that name.").await?;
+        return Ok(());
+    };
+
+    ctx.data().badges.change_link(id, link).await?;
+
+    ctx.say("link updated!").await?;
+
+    Ok(())
+}
+
+#[poise::command(rename = "update-date", slash_command, owners_only)]
+pub async fn update_date(
+    ctx: crate::Context<'_>,
+    #[autocomplete = "autocomplete_event"] event_name: String,
+    date: Option<String>,
+) -> Result<(), Error> {
+    let id = ctx.data().badges.event_id_from_name(&event_name).await?;
+
+    let Some(id) = id else {
+        ctx.say("Could not find event with that name.").await?;
+        return Ok(());
+    };
+
+    ctx.data()
+        .badges
+        .change_timestamp(id, event_date_from_string(date.as_deref())?)
+        .await?;
+
+    ctx.say("link updated!").await?;
+
+    Ok(())
+}
+
+#[poise::command(rename = "update-badge", slash_command, owners_only)]
+pub async fn update_badge(
+    ctx: crate::Context<'_>,
+    #[autocomplete = "autocomplete_event"] event_name: String,
+    attachment: Attachment,
+    badge_name: String,
+) -> Result<(), Error> {
+    let id = ctx.data().badges.event_id_from_name(&event_name).await?;
+
+    let Some(id) = id else {
+        ctx.say("Could not find event with that name.").await?;
+        return Ok(());
+    };
+
+    if attachment.size > 250_000 {
+        ctx.say("Badge is too big to be uploaded to discord as an emote")
+            .await?;
+        return Ok(());
+    }
+
+    let attachment_bytes = attachment.download().await?;
+
+    ctx.data()
+        .badges
+        .replace_badge(ctx.serenity_context(), id, attachment_bytes, badge_name)
+        .await?;
+
+    ctx.say("badge updated!").await?;
+
+    Ok(())
+}
+
+// one that replaces the badge.
 
 #[poise::command(rename = "dbg-cache", prefix_command, guild_only, owners_only)]
 pub async fn dbg_cache(ctx: crate::Context<'_>) -> Result<(), Error> {
@@ -208,11 +343,16 @@ pub async fn all_events(ctx: crate::Context<'_>) -> Result<(), Error> {
 }
 
 pub fn commands() -> Vec<crate::Command> {
+    let add_event = poise::Command {
+        prefix_action: add_event_prefix().prefix_action,
+        ..add_event()
+    };
+
     vec![
         badges(),
         invalidate_badge_cache(),
         dbg_cache(),
-        add_event(),
+        add_event,
         all_events(),
     ]
     .into_iter()

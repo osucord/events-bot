@@ -78,6 +78,32 @@ impl EventBadges {
         badge_name: String,
         attachment: Vec<u8>,
     ) -> Result<(), Error> {
+        self.new_event_(ctx, name, badge_name, attachment, None, Some(0))
+            .await
+    }
+
+    pub async fn new_event_slash(
+        &self,
+        ctx: &serenity::all::Context,
+        name: String,
+        badge_name: String,
+        attachment: Vec<u8>,
+        link: Option<String>,
+        date: i64,
+    ) -> Result<(), Error> {
+        self.new_event_(ctx, name, badge_name, attachment, link, Some(date))
+            .await
+    }
+
+    async fn new_event_(
+        &self,
+        ctx: &serenity::all::Context,
+        name: String,
+        badge_name: String,
+        attachment: Vec<u8>,
+        link: Option<String>,
+        date: Option<i64>,
+    ) -> Result<(), Error> {
         if name.len() > 120 {
             return Err("Are you sure you want a name that long? it'll be hard to read.".into());
         }
@@ -89,7 +115,7 @@ impl EventBadges {
         let emoji = ctx
             .create_application_emoji(
                 &badge_name,
-                &CreateAttachment::bytes(attachment, "a").to_base64(),
+                &CreateAttachment::bytes(attachment, "_").to_base64(),
             )
             .await?;
 
@@ -97,7 +123,7 @@ impl EventBadges {
             animated: emoji.animated(),
             discord_name: emoji.name.to_string(),
             discord_id: emoji.id.get(),
-            link: None,
+            link: link.clone(),
         };
 
         let mut transaction = self.db.begin().await?;
@@ -105,22 +131,24 @@ impl EventBadges {
 
         let badge_id = sqlx::query!(
             r#"
-            INSERT INTO badges (animated, emoji_name, emoji_id)
-            VALUES (?, ?, ?)
+            INSERT INTO badges (animated, emoji_name, emoji_id, link)
+            VALUES (?, ?, ?, ?)
             "#,
             badge.animated,
             badge.discord_name,
-            d_id
+            d_id,
+            link,
         )
         .execute(&mut *transaction)
         .await?
         .last_insert_rowid();
 
-        // TODO: no hardcoding.
+        let date = date.unwrap_or_default();
+
         let event_id = query!(
             "INSERT INTO events (event_name, event_date, badge_id) VALUES (?, ?, ?)",
             name,
-            0,
+            date,
             badge_id
         )
         .execute(&mut *transaction)
@@ -131,9 +159,45 @@ impl EventBadges {
         self.events.write().push(Event {
             id: event_id as u16,
             name,
-            date: 0,
+            date,
             badge,
         });
+
+        Ok(())
+    }
+
+    pub async fn change_timestamp(&self, event_id: u16, date: i64) -> Result<(), Error> {
+        query!(
+            "UPDATE events SET event_date = $1 WHERE id = $2",
+            date,
+            event_id
+        )
+        .execute(&self.db)
+        .await?;
+
+        let mut events = self.events.write();
+        if let Some(event) = events.iter_mut().find(|e| e.id == event_id) {
+            event.date = date;
+        }
+
+        Ok(())
+    }
+
+    pub async fn change_link(&self, event_id: u16, link: Option<String>) -> Result<(), Error> {
+        query!(
+            "UPDATE badges
+             SET link = $1
+             WHERE id = (SELECT badge_id FROM events WHERE id = $2)",
+            link,
+            event_id
+        )
+        .execute(&self.db)
+        .await?;
+
+        let mut events = self.events.write();
+        if let Some(event) = events.iter_mut().find(|e| e.id == event_id) {
+            event.badge.link = link;
+        }
 
         Ok(())
     }
@@ -170,7 +234,7 @@ impl EventBadges {
         .map(|row| Event {
             id: row.event_id as u16,
             name: row.event_name,
-            date: row.event_date as u64,
+            date: row.event_date,
             badge: Badge {
                 animated: row.animated,
                 discord_name: row.emoji_name,
@@ -354,6 +418,17 @@ impl EventBadges {
         Err("Event does not exist with that name".into())
     }
 
+    pub async fn event_id_from_name(&self, name: &str) -> Result<Option<u16>, Error> {
+        self.populate().await?;
+
+        Ok(self
+            .events
+            .read()
+            .iter()
+            .find(|e| e.name.contains(name))
+            .map(|e| e.id))
+    }
+
     async fn remove_user_badge_(&self, user_id: i64, event_id: u16) -> Result<(), Error> {
         self.populate().await?;
 
@@ -373,6 +448,59 @@ impl EventBadges {
         .execute(&self.db)
         .await
         .map_err(|_| "User did not have this badge.")?;
+
+        Ok(())
+    }
+
+    pub async fn replace_badge(
+        &self,
+        ctx: &serenity::all::Context,
+        event_id: u16,
+        bytes: Vec<u8>,
+        name: String,
+    ) -> Result<(), Error> {
+        let emoji = ctx
+            .create_application_emoji(&name, &CreateAttachment::bytes(bytes, "_").to_base64())
+            .await?;
+
+        let old_emoji_id: i64 = sqlx::query_scalar!(
+            "SELECT emoji_id FROM badges WHERE id = (SELECT badge_id FROM events WHERE id = $1)",
+            event_id
+        )
+        .fetch_one(&self.db)
+        .await?;
+
+        let id = emoji.id.get() as i64;
+        let animated = emoji.animated();
+
+        query!(
+            "UPDATE badges
+             SET emoji_name = $1,
+                 emoji_id = $2,
+                 animated = $3
+             WHERE id = (SELECT badge_id FROM events WHERE id = $4)",
+            name,
+            id,
+            animated,
+            event_id
+        )
+        .execute(&self.db)
+        .await?;
+
+        ctx.delete_application_emoji(serenity::all::EmojiId::new(old_emoji_id as u64))
+            .await?;
+
+        let mut events = self.events.write();
+        if let Some(event) = events.iter_mut().find(|e| e.id == event_id) {
+            let link = event.badge.link.take();
+
+            event.badge = Badge {
+                animated,
+                discord_name: name,
+                discord_id: id as u64,
+                link,
+            }
+        }
 
         Ok(())
     }
@@ -431,7 +559,7 @@ pub struct Event {
     /// Event's id, autoincrementing from database starting at 1.
     pub id: u16,
     pub name: String,
-    pub date: u64,
+    pub date: i64,
     pub badge: Badge,
 }
 

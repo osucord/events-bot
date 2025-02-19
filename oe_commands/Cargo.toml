@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 aformat.workspace = true
+chrono.workspace = true
 itertools.workspace = true
 oe_core = { version = "0.1.0", path = "../oe_core" }
 poise.workspace = true
