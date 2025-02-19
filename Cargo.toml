@@ -49,6 +49,6 @@ default-features = false
 branch = "next"
 
 [workspace.dependencies.poise]
-git = "https://github.com/jamesbt365/poise"
+git = "https://github.com/serenity-rs/poise"
 features = ["cache"]
-branch = "fix-compile-serenity-next"
+branch = "serenity-next"
