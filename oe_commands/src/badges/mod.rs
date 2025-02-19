@@ -194,7 +194,7 @@ pub async fn add_event(
     Ok(())
 }
 
-#[poise::command(rename = "update-link", slash_command, owners_only)]
+#[poise::command(rename = "update-link", slash_command, prefix_command, owners_only)]
 pub async fn update_link(
     ctx: crate::Context<'_>,
     #[autocomplete = "autocomplete_event"] event_name: String,
@@ -214,7 +214,7 @@ pub async fn update_link(
     Ok(())
 }
 
-#[poise::command(rename = "update-date", slash_command, owners_only)]
+#[poise::command(rename = "update-date", slash_command, prefix_command, owners_only)]
 pub async fn update_date(
     ctx: crate::Context<'_>,
     #[autocomplete = "autocomplete_event"] event_name: String,
@@ -237,7 +237,7 @@ pub async fn update_date(
     Ok(())
 }
 
-#[poise::command(rename = "update-badge", slash_command, owners_only)]
+#[poise::command(rename = "update-badge", slash_command, prefix_command, owners_only)]
 pub async fn update_badge(
     ctx: crate::Context<'_>,
     #[autocomplete = "autocomplete_event"] event_name: String,
@@ -354,6 +354,9 @@ pub fn commands() -> Vec<crate::Command> {
         dbg_cache(),
         add_event,
         all_events(),
+        update_badge(),
+        update_date(),
+        update_link(),
     ]
     .into_iter()
     .chain(users::commands())
