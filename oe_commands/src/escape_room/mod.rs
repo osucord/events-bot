@@ -83,7 +83,7 @@ pub async fn set_question(
                         member_roles.push(role);
                     } else {
                         failure = true;
-                    };
+                    }
                 }
                 _ => {
                     failure = true;

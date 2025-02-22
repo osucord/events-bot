@@ -99,7 +99,7 @@ pub async fn remove_user_prefix(
             .is_err()
         {
             failed.push(user);
-        };
+        }
     }
 
     if failed.is_empty() {

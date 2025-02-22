@@ -205,7 +205,7 @@ fn matches_answers(answers: &FixedArray<FixedString<u16>>, question: &Question) 
 
     if matches_string {
         return true;
-    };
+    }
 
     answers.iter().enumerate().all(|(i, a)| {
         question
@@ -230,7 +230,7 @@ fn checks(
     // If its not active, don't allow interactions to run.
     if !room.active {
         return Err(());
-    };
+    }
 
     let custom_id = press.data.custom_id.as_str();
     let q = room

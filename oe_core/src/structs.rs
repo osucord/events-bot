@@ -110,7 +110,7 @@ impl EventBadges {
 
         if badge_name.len() > 32 {
             return Err("One or more of your badge names will be too long!".into());
-        };
+        }
 
         let emoji = ctx
             .create_application_emoji(

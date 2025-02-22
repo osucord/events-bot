@@ -35,7 +35,7 @@ pub async fn activate(
                 Err(e) => {
                     ctx.say(e.to_string()).await?;
                 }
-            };
+            }
 
             return Ok(());
         }
@@ -43,7 +43,7 @@ pub async fn activate(
         ctx.data().set_status(false);
         ctx.say("Deactivated the escape room!").await?;
         return Ok(());
-    };
+    }
 
     // the user didn't specify, show the currest status.
     let status = if ctx.data().get_status() {
@@ -71,7 +71,7 @@ pub async fn setup(
     if category.kind != ChannelType::Category {
         ctx.say("The selected channel is not a Category!").await?;
         return Ok(());
-    };
+    }
 
     let bot_id = ctx.cache().current_user().id;
     let Ok(member) = ctx.guild_id().unwrap().member(ctx, bot_id).await else {
@@ -180,7 +180,7 @@ async fn setup_channels(
     if questions.is_empty() {
         ctx.say("There isn't any questions!").await?;
         return Ok(());
-    };
+    }
 
     ctx.say("setting up!").await?;
 
@@ -420,7 +420,7 @@ pub async fn send_messages_core(
         channel_id.send_message(ctx.http(), builder).await?;
     } else {
         channel_id.send_message(ctx.http(), builder).await?;
-    };
+    }
 
     if let Some(url) = &question.attachment_path {
         let attachment = CreateAttachment::path(url).await;
@@ -436,7 +436,7 @@ pub async fn send_messages_core(
                 );
             }
         }
-    };
+    }
     Ok(())
 }
 
@@ -485,7 +485,7 @@ fn member_permissions(guild: &serenity::Guild, member: &serenity::Member) -> Per
 
     if permissions.contains(Permissions::ADMINISTRATOR) {
         return Permissions::all();
-    };
+    }
 
     permissions
 }

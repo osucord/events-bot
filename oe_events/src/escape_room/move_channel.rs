@@ -185,7 +185,7 @@ async fn handle_overwrite(
             .is_err()
         {
             handle_err(framework, user_id, Some(remove_role), add_role).await;
-        };
+        }
     }
 
     // move them to the right question, good for fixing perms or other stuff.
