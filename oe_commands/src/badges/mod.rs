@@ -72,20 +72,43 @@ pub async fn badges(ctx: Context<'_>, user: Option<User>) -> Result<(), Error> {
         .color(serenity::Colour::BLUE)
         .thumbnail(user.face());
 
+    // This will tide us off for... quite some time but isn't perfect as it could push to description when description is full but field isn't.
+    let mut description = String::new();
+
     if participated_count != 0 {
-        embed = embed.field(
-            format!("Participated Events `{participated_count}/{total_events}`"),
-            value,
-            false,
-        );
+        if value.len() > 1024 {
+            writeln!(
+                description,
+                "Participated Events `{participated_count}/{total_events}`\n{value}"
+            )
+            .unwrap();
+        } else {
+            embed = embed.field(
+                format!("Participated Events `{participated_count}/{total_events}`"),
+                value,
+                false,
+            );
+        }
     }
 
     if contributed_count != 0 {
-        embed = embed.field(
-            format!("Contributed Events `{contributed_count}/{total_events}`"),
-            contribution,
-            false,
-        );
+        if contribution.len() > 1024 {
+            writeln!(
+                description,
+                "**Contributed Events `{contributed_count}/{total_events}`**\n{contribution}"
+            )
+            .unwrap();
+        } else {
+            embed = embed.field(
+                format!("**Contributed Events `{contributed_count}/{total_events}`**"),
+                contribution,
+                false,
+            );
+        }
+    }
+
+    if !description.is_empty() {
+        embed = embed.description(description);
     }
 
     ctx.send(poise::CreateReply::new().embed(embed)).await?;
